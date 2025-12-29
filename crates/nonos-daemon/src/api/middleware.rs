@@ -65,7 +65,8 @@ impl ApiRateLimiter {
             tokens_per_sec: requests_per_second as f64,
             burst_size,
             state: RwLock::new(HashMap::new()),
-            global: RwLock::new(TokenBucket::new(burst_size as f64)),
+            // Global bucket has 10x the burst to allow for multiple IPs
+            global: RwLock::new(TokenBucket::new(burst_size as f64 * 10.0)),
         }
     }
 
@@ -208,7 +209,15 @@ impl ApiAuthenticator {
 
     /// Check if a path is public (no auth required)
     fn is_public_path(&self, path: &str) -> bool {
-        self.public_paths.iter().any(|&p| path == p || path.starts_with(p))
+        self.public_paths.iter().any(|&p| {
+            if p == "/" {
+                // Root path requires exact match
+                path == "/"
+            } else {
+                // Other paths can be prefixes
+                path == p || path.starts_with(&format!("{}/", p))
+            }
+        })
     }
 
     /// Add a public path
@@ -228,6 +237,36 @@ fn constant_time_compare(a: &str, b: &str) -> bool {
         result |= x ^ y;
     }
     result == 0
+}
+
+/// Trusted proxy configuration for X-Forwarded-For handling
+#[derive(Debug, Clone, Default)]
+pub struct TrustedProxies {
+    /// List of trusted proxy IPs that can set X-Forwarded-For
+    pub proxies: Vec<IpAddr>,
+}
+
+impl TrustedProxies {
+    /// Create with no trusted proxies (only trust direct connections)
+    pub fn none() -> Self {
+        Self { proxies: vec![] }
+    }
+
+    /// Create with localhost as trusted proxy
+    pub fn localhost() -> Self {
+        use std::net::{Ipv4Addr, Ipv6Addr};
+        Self {
+            proxies: vec![
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+            ],
+        }
+    }
+
+    /// Check if an IP is a trusted proxy
+    pub fn is_trusted(&self, ip: &IpAddr) -> bool {
+        self.proxies.contains(ip)
+    }
 }
 
 /// HTTP headers extracted from request
@@ -266,7 +305,34 @@ impl RequestHeaders {
     }
 
     /// Get the real client IP (considering proxies)
-    pub fn real_ip(&self, socket_ip: IpAddr) -> IpAddr {
+    /// Only trusts X-Forwarded-For if connection comes from a trusted proxy
+    pub fn real_ip(&self, socket_ip: IpAddr, trusted_proxies: &TrustedProxies) -> IpAddr {
+        // Only trust forwarded headers if connection is from a trusted proxy
+        if !trusted_proxies.is_trusted(&socket_ip) {
+            return socket_ip;
+        }
+
+        // Try X-Forwarded-For first (first IP in chain)
+        if let Some(ref xff) = self.x_forwarded_for {
+            if let Some(first_ip) = xff.split(',').next() {
+                if let Ok(ip) = first_ip.trim().parse() {
+                    return ip;
+                }
+            }
+        }
+
+        // Try X-Real-IP
+        if let Some(ref xri) = self.x_real_ip {
+            if let Ok(ip) = xri.parse() {
+                return ip;
+            }
+        }
+
+        socket_ip
+    }
+
+    /// Get real IP without trusted proxy check (legacy, use real_ip with TrustedProxies instead)
+    pub fn real_ip_unsafe(&self, socket_ip: IpAddr) -> IpAddr {
         // Try X-Forwarded-For first (first IP in chain)
         if let Some(ref xff) = self.x_forwarded_for {
             if let Some(first_ip) = xff.split(',').next() {
@@ -294,21 +360,78 @@ pub struct ApiContext {
     pub rate_limiter: Arc<ApiRateLimiter>,
     /// Authenticator
     pub authenticator: Arc<ApiAuthenticator>,
+    /// Trusted proxy configuration
+    pub trusted_proxies: Arc<TrustedProxies>,
+    /// Whether auth was explicitly disabled
+    pub auth_explicitly_disabled: bool,
 }
 
 impl ApiContext {
-    /// Create a new API context
+    /// Create a new API context with authentication
     pub fn new(auth_token: Option<String>, requests_per_second: u32, burst_size: u32) -> Self {
         Self {
             rate_limiter: Arc::new(ApiRateLimiter::new(requests_per_second, burst_size)),
             authenticator: Arc::new(ApiAuthenticator::new(auth_token)),
+            trusted_proxies: Arc::new(TrustedProxies::none()),
+            auth_explicitly_disabled: false,
         }
     }
 
-    /// Create with defaults (no auth, default rate limits)
-    pub fn default_without_auth() -> Self {
-        Self::new(None, 100, 200)
+    /// Create with trusted proxies configured
+    pub fn with_trusted_proxies(
+        auth_token: Option<String>,
+        requests_per_second: u32,
+        burst_size: u32,
+        trusted_proxies: TrustedProxies,
+    ) -> Self {
+        Self {
+            rate_limiter: Arc::new(ApiRateLimiter::new(requests_per_second, burst_size)),
+            authenticator: Arc::new(ApiAuthenticator::new(auth_token)),
+            trusted_proxies: Arc::new(trusted_proxies),
+            auth_explicitly_disabled: false,
+        }
     }
+
+    /// Create with defaults and no auth - MUST be explicitly called
+    /// This is for development/testing only. Logs a warning.
+    pub fn insecure_without_auth() -> Self {
+        Self {
+            rate_limiter: Arc::new(ApiRateLimiter::new(100, 200)),
+            authenticator: Arc::new(ApiAuthenticator::new(None)),
+            trusted_proxies: Arc::new(TrustedProxies::none()),
+            auth_explicitly_disabled: true,
+        }
+    }
+
+    /// Create with a generated random token (for first-run scenarios)
+    pub fn with_generated_token(requests_per_second: u32, burst_size: u32) -> (Self, String) {
+        let token = generate_random_token();
+        let ctx = Self {
+            rate_limiter: Arc::new(ApiRateLimiter::new(requests_per_second, burst_size)),
+            authenticator: Arc::new(ApiAuthenticator::new(Some(token.clone()))),
+            trusted_proxies: Arc::new(TrustedProxies::none()),
+            auth_explicitly_disabled: false,
+        };
+        (ctx, token)
+    }
+
+    /// Check if authentication is enabled
+    pub fn is_auth_enabled(&self) -> bool {
+        !self.auth_explicitly_disabled && self.authenticator.token.is_some()
+    }
+
+    /// DEPRECATED: Use insecure_without_auth() instead
+    #[deprecated(note = "Use insecure_without_auth() to make security implications explicit")]
+    pub fn default_without_auth() -> Self {
+        Self::insecure_without_auth()
+    }
+}
+
+/// Generate a cryptographically secure random token
+fn generate_random_token() -> String {
+    use nonos_crypto::random_bytes;
+    let bytes: [u8; 32] = random_bytes();
+    hex::encode(bytes)
 }
 
 #[cfg(test)]
@@ -386,19 +509,53 @@ mod tests {
     }
 
     #[test]
-    fn test_real_ip_extraction() {
+    fn test_real_ip_extraction_with_trusted_proxy() {
+        let localhost = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let untrusted_ip = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
+        let trusted = TrustedProxies::localhost();
+        let no_trust = TrustedProxies::none();
+
+        let headers = RequestHeaders {
+            x_forwarded_for: Some("1.2.3.4, 5.6.7.8".to_string()),
+            ..Default::default()
+        };
+
+        // From trusted proxy (localhost) - should use XFF
+        assert_eq!(
+            headers.real_ip(localhost, &trusted),
+            IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))
+        );
+
+        // From untrusted source - should ignore XFF
+        assert_eq!(
+            headers.real_ip(untrusted_ip, &trusted),
+            untrusted_ip
+        );
+
+        // No trusted proxies configured - always use socket IP
+        assert_eq!(
+            headers.real_ip(localhost, &no_trust),
+            localhost
+        );
+    }
+
+    #[test]
+    fn test_real_ip_unsafe_legacy() {
         let socket_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
         let headers = RequestHeaders {
             x_forwarded_for: Some("1.2.3.4, 5.6.7.8".to_string()),
             ..Default::default()
         };
+
+        // Legacy unsafe method always trusts XFF
         assert_eq!(
-            headers.real_ip(socket_ip),
+            headers.real_ip_unsafe(socket_ip),
             IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))
         );
 
+        // No XFF should return socket IP
         let headers = RequestHeaders::default();
-        assert_eq!(headers.real_ip(socket_ip), socket_ip);
+        assert_eq!(headers.real_ip_unsafe(socket_ip), socket_ip);
     }
 }
