@@ -37,12 +37,27 @@ pub struct ApiServer {
 }
 
 impl ApiServer {
-    /// Create new API server
+    /// Create new API server with required authentication
+    /// If no auth_token is provided, a random token will be generated and logged
     pub fn new(
         addr: SocketAddr,
         node: Arc<RwLock<Node>>,
         metrics: Arc<NodeMetricsCollector>,
+        auth_token: Option<String>,
     ) -> Self {
+        let api_context = match auth_token {
+            Some(token) if !token.is_empty() => {
+                Arc::new(ApiContext::new(Some(token), 100, 200))
+            }
+            _ => {
+                // Generate a random token and warn
+                let (ctx, token) = ApiContext::with_generated_token(100, 200);
+                warn!("No API auth_token configured. Generated random token: {}", token);
+                warn!("Add this to your config.toml: auth_token = \"{}\"", token);
+                Arc::new(ctx)
+            }
+        };
+
         Self {
             addr,
             running: Arc::new(RwLock::new(false)),
@@ -52,7 +67,28 @@ impl ApiServer {
             contract_client: None,
             reward_tracker: None,
             staker_address: None,
-            api_context: Arc::new(ApiContext::default_without_auth()),
+            api_context,
+        }
+    }
+
+    /// Create API server explicitly without authentication (INSECURE)
+    /// Only use this for development/testing
+    pub fn new_insecure_no_auth(
+        addr: SocketAddr,
+        node: Arc<RwLock<Node>>,
+        metrics: Arc<NodeMetricsCollector>,
+    ) -> Self {
+        warn!("API server created WITHOUT authentication - this is insecure!");
+        Self {
+            addr,
+            running: Arc::new(RwLock::new(false)),
+            node,
+            metrics,
+            privacy: None,
+            contract_client: None,
+            reward_tracker: None,
+            staker_address: None,
+            api_context: Arc::new(ApiContext::insecure_without_auth()),
         }
     }
 
@@ -78,13 +114,36 @@ impl ApiServer {
         }
     }
 
-    /// Create new API server with privacy services
+    /// Create new API server with privacy services and authentication
+    /// If auth_token is None and auth_required is true, generates a random token
     pub fn with_privacy(
         addr: SocketAddr,
         node: Arc<RwLock<Node>>,
         metrics: Arc<NodeMetricsCollector>,
         privacy: Arc<PrivacyServiceManager>,
+        auth_token: Option<String>,
+        auth_required: bool,
+        requests_per_second: u32,
+        burst_size: u32,
     ) -> Self {
+        let api_context = if auth_required {
+            match auth_token {
+                Some(token) if !token.is_empty() => {
+                    Arc::new(ApiContext::new(Some(token), requests_per_second, burst_size))
+                }
+                _ => {
+                    // Generate a random token and warn
+                    let (ctx, token) = ApiContext::with_generated_token(requests_per_second, burst_size);
+                    warn!("No API auth_token configured but auth required. Generated token: {}", token);
+                    warn!("Set NONOS_API_TOKEN={} or add to config.toml", token);
+                    Arc::new(ctx)
+                }
+            }
+        } else {
+            warn!("API authentication DISABLED - API is open to all requests!");
+            Arc::new(ApiContext::insecure_without_auth())
+        };
+
         Self {
             addr,
             running: Arc::new(RwLock::new(false)),
@@ -94,11 +153,13 @@ impl ApiServer {
             contract_client: None,
             reward_tracker: None,
             staker_address: None,
-            api_context: Arc::new(ApiContext::default_without_auth()),
+            api_context,
         }
     }
 
     /// Create full API server with all services
+    /// DEPRECATED: Use full_with_auth instead to ensure authentication is configured
+    #[deprecated(note = "Use full_with_auth to ensure authentication is properly configured")]
     pub fn full(
         addr: SocketAddr,
         node: Arc<RwLock<Node>>,
@@ -108,6 +169,7 @@ impl ApiServer {
         reward_tracker: Arc<RewardTracker>,
         staker_address: EthAddress,
     ) -> Self {
+        warn!("Using deprecated full() constructor without authentication - use full_with_auth()");
         Self {
             addr,
             running: Arc::new(RwLock::new(false)),
@@ -117,7 +179,7 @@ impl ApiServer {
             contract_client: Some(contract_client),
             reward_tracker: Some(reward_tracker),
             staker_address: Some(staker_address),
-            api_context: Arc::new(ApiContext::default_without_auth()),
+            api_context: Arc::new(ApiContext::insecure_without_auth()),
         }
     }
 
