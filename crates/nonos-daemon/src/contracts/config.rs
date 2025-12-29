@@ -194,9 +194,8 @@ impl ContractConfig {
         parse_eth_address(NOX_STAKING_VAULT)
     }
 
-    /// Create production mainnet config
-    /// Uses official NOX token and staking contract addresses
-    pub fn mainnet_production() -> Self {
+    /// Create mainnet config with official NOX token and staking contract addresses
+    pub fn mainnet_default() -> Self {
         let staking_addr = nox_staking_contract();
         Self {
             rpc_url: "https://ethereum-rpc.publicnode.com".to_string(),

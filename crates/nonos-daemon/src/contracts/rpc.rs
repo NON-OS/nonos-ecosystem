@@ -54,8 +54,7 @@ impl RpcEndpoint {
     }
 }
 
-/// Production RPC endpoints for Ethereum mainnet
-/// Multiple providers for redundancy - no single point of failure
+/// RPC endpoints for Ethereum mainnet (multiple providers for redundancy)
 pub const MAINNET_RPC_ENDPOINTS: &[&str] = &[
     // Public endpoints (no API key required)
     "https://ethereum-rpc.publicnode.com",

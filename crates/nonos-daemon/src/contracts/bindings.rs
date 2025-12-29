@@ -5,7 +5,6 @@
 use ethers::contract::abigen;
 
 // Generate contract bindings from ABI
-// Note: In production, these ABIs would be imported from actual deployed contracts
 abigen!(
     NoxStaking,
     r#"[
