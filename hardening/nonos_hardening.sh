@@ -49,15 +49,17 @@ echo -e "${GREEN}[*]${NC} Detected: $OS $VERSION"
 echo -e "${GREEN}[*]${NC} Hardening started at $(date)"
 echo ""
 
-# Configurable SSH port (default: keep current or use 22)
-SSH_PORT=${NONOS_SSH_PORT:-22}
+# Configurable SSH port (default: high port for security)
+SSH_PORT=${NONOS_SSH_PORT:-54222}
 NONOS_API_PORT=${NONOS_API_PORT:-8420}
 NONOS_P2P_PORT=${NONOS_P2P_PORT:-9420}
 
-echo -e "${YELLOW}[!] SSH will remain on port $SSH_PORT${NC}"
+echo -e "${RED}[!] IMPORTANT: SSH will be moved to port $SSH_PORT${NC}"
+echo -e "${RED}[!] After this script, connect with: ssh -p $SSH_PORT user@server${NC}"
 echo -e "${YELLOW}[!] NONOS API port: $NONOS_API_PORT${NC}"
 echo -e "${YELLOW}[!] NONOS P2P port: $NONOS_P2P_PORT${NC}"
 echo ""
+echo -e "${YELLOW}Make sure you have another terminal open before continuing!${NC}"
 read -p "Press ENTER to continue or Ctrl+C to abort..."
 echo ""
 
