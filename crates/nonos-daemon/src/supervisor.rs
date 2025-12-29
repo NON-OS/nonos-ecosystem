@@ -4,7 +4,7 @@
 
 //! Task Supervisor Module
 //!
-//! Provides production-grade task supervision with:
+//! Provides task supervision with:
 //! - JoinHandle management for all async tasks
 //! - Configurable restart policies (never, always, on-failure)
 //! - Health tracking with sliding window
