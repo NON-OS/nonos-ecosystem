@@ -15,14 +15,13 @@
 //! - Distributed cookie vault
 
 use super::cookie_vault::DistributedCookieVault;
-use super::credentials::CredentialProver;
+use super::credentials::CredentialManager;
 use super::fingerprint::FingerprintNormalizer;
-use super::mixnet::MixnetProcessor;
+use super::mixnet::{MixnetProcessor, MixnetKeypair};
 use super::oracle::PrivacyOracle;
 use super::pir::PrivateContentRetrieval;
 use super::stealth_sessions::StealthSessionManager;
 use super::zk_sessions::ZkSessionManager;
-use nonos_crypto::random_bytes;
 use nonos_types::NonosResult;
 use std::collections::HashMap;
 use tracing::warn;
@@ -33,22 +32,20 @@ pub struct AdvancedPrivacyManager {
     pub pir: PrivateContentRetrieval,
     pub privacy_oracle: PrivacyOracle,
     pub stealth_sessions: StealthSessionManager,
-    pub credentials: CredentialProver,
+    pub credentials: CredentialManager,
     pub fingerprint: FingerprintNormalizer,
     pub cookie_vault: DistributedCookieVault,
 }
 
 impl AdvancedPrivacyManager {
     pub fn new() -> Self {
-        let mixing_key = random_bytes::<32>();
-
         Self {
             zk_sessions: ZkSessionManager::new(),
-            mixnet: MixnetProcessor::new(mixing_key),
+            mixnet: MixnetProcessor::new(),
             pir: PrivateContentRetrieval::new(10000),
             privacy_oracle: PrivacyOracle::new(),
             stealth_sessions: StealthSessionManager::new(),
-            credentials: CredentialProver::new(),
+            credentials: CredentialManager::new(),
             fingerprint: FingerprintNormalizer::new(),
             cookie_vault: DistributedCookieVault::new(3, 5),
         }
@@ -61,15 +58,15 @@ impl AdvancedPrivacyManager {
         cookie_threshold: u8,
         cookie_shares: u8,
     ) -> Self {
-        let mixing_key = random_bytes::<32>();
+        let keypair = MixnetKeypair::generate();
 
         Self {
             zk_sessions: ZkSessionManager::new(),
-            mixnet: MixnetProcessor::with_config(mixing_key, mixnet_pool_size, mixnet_max_delay_ms),
+            mixnet: MixnetProcessor::with_config(keypair, mixnet_pool_size, mixnet_max_delay_ms),
             pir: PrivateContentRetrieval::new(pir_cache_size),
             privacy_oracle: PrivacyOracle::new(),
             stealth_sessions: StealthSessionManager::new(),
-            credentials: CredentialProver::new(),
+            credentials: CredentialManager::new(),
             fingerprint: FingerprintNormalizer::new(),
             cookie_vault: DistributedCookieVault::new(cookie_threshold, cookie_shares),
         }
@@ -159,7 +156,7 @@ impl AdvancedPrivacyManager {
     pub async fn cleanup(&self) {
         self.pir.cleanup_expired().await;
         self.stealth_sessions.cleanup_expired().await;
-        self.credentials.cleanup_expired_proofs().await;
+        self.credentials.cleanup_expired().await;
     }
 }
 

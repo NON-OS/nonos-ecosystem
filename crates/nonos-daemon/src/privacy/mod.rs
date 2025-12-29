@@ -31,6 +31,7 @@ mod credentials;
 mod fingerprint;
 mod cookie_vault;
 mod advanced;
+mod zk_credentials;
 
 // Core privacy services
 pub use zk_identity::ZkIdentityService;
@@ -42,11 +43,14 @@ pub use manager::{PrivacyServiceManager, PrivacyStats};
 // ZK-Authenticated Sessions
 pub use zk_sessions::{ZkSessionManager, ZkSessionProof};
 
-// Multi-Node Mixnet
-pub use mixnet::{MixnetProcessor, MixnetRequest};
+// Onion-Routed Mixnet
+pub use mixnet::{
+    MixnetProcessor, MixnetKeypair, MixNode, OnionPacket, DecryptedLayer,
+    PooledRequest, build_onion_packet, decrypt_onion_layer,
+};
 
-// Private Information Retrieval
-pub use pir::{PrivateContentRetrieval, CachedContent};
+// Commitment-Based Content Cache (not PIR)
+pub use pir::{PrivateContentRetrieval, CachedContent, ContentMetadata, CacheStats};
 
 // Privacy Oracle Network
 pub use oracle::{PrivacyOracle, DomainPrivacyScore, CookieBehavior};
@@ -54,8 +58,10 @@ pub use oracle::{PrivacyOracle, DomainPrivacyScore, CookieBehavior};
 // Stealth Browsing Sessions
 pub use stealth_sessions::{StealthSession, StealthSessionManager};
 
-// ZK Credentials
-pub use credentials::{CredentialProver, CredentialType, ZkCredentialProof};
+// Credential Commitments (not ZK)
+pub use credentials::{
+    CredentialManager, CredentialType, CredentialProof, StoredCredential, CredentialInfo,
+};
 
 // Fingerprint Normalization
 pub use fingerprint::{FingerprintNormalizer, NormalizedRequest};
@@ -65,6 +71,12 @@ pub use cookie_vault::{DistributedCookieVault, SecretShare};
 
 // Unified Advanced Privacy Manager
 pub use advanced::{AdvancedPrivacyManager, AdvancedPrivacyStats};
+
+// ZK Credentials (Groth16 on BN254)
+pub use zk_credentials::{
+    ZkCredentialSystem, ZkCredential, ZkCredentialType, ZkCredentialProof,
+    ZkPublicInputs, MerkleProof, MERKLE_DEPTH,
+};
 
 #[cfg(test)]
 mod tests;
