@@ -32,10 +32,14 @@ pub use privacy::{
     TrackingBlockerService, StealthScannerService,
     // Advanced privacy features
     AdvancedPrivacyManager, AdvancedPrivacyStats, ZkSessionManager, ZkSessionProof,
-    MixnetProcessor, MixnetRequest, PrivateContentRetrieval, CachedContent,
+    MixnetProcessor, OnionPacket, MixnetKeypair, MixNode, DecryptedLayer, PooledRequest,
+    PrivateContentRetrieval, CachedContent,
     PrivacyOracle, DomainPrivacyScore, CookieBehavior, StealthSession, StealthSessionManager,
-    CredentialProver, CredentialType, ZkCredentialProof, FingerprintNormalizer,
+    CredentialManager, CredentialType, CredentialProof, FingerprintNormalizer,
     NormalizedRequest, DistributedCookieVault, SecretShare,
+    // ZK credentials (Groth16)
+    ZkCredentialSystem, ZkCredential, ZkCredentialType, ZkCredentialProof,
+    ZkPublicInputs, MerkleProof, MERKLE_DEPTH,
 };
 pub use api::ApiServer;
 pub use supervisor::{
