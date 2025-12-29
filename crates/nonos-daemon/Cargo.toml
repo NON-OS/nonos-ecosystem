@@ -1,6 +1,6 @@
 [package]
 name = "nonos-daemon"
-description = "NONOS Daemon - Production-grade decentralized node powering the NONOS ecosystem"
+description = "NONOS Daemon - First release || Decentralized node powering the NONOS ecosystem"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -62,6 +62,20 @@ rand = { workspace = true }
 
 # Crypto
 blake3 = { workspace = true }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+aes-gcm = "0.10"
+
+# ZK Proofs (arkworks - Groth16 on BN254)
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-bn254 = "0.4"
+ark-groth16 = "0.4"
+ark-relations = "0.4"
+ark-r1cs-std = "0.4"
+ark-snark = "0.4"
+ark-serialize = { version = "0.4", features = ["derive"] }
+ark-std = "0.4"
+ark-crypto-primitives = { version = "0.4", features = ["r1cs", "sponge"] }
 
 # Directories
 dirs = "5.0"
