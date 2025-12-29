@@ -43,7 +43,7 @@ fn generate_identity(identities_dir: &PathBuf, label: Option<String>, format: &O
     rand::thread_rng().fill_bytes(&mut blinding);
     rand::thread_rng().fill_bytes(&mut spending_key);
 
-    // Use real ZK-compatible commitment (MiMC hash)
+    // ZK-compatible commitment (MiMC hash)
     let commitment = compute_zk_commitment(&secret, &blinding);
     let nullifier = compute_nullifier(&spending_key, &commitment);
     let id = hex::encode(&commitment[..8]);
@@ -327,11 +327,11 @@ fn generate_proof(
 }
 
 fn verify_proof(proof: &str, format: &OutputFormat) -> NonosResult<()> {
-    // Parse the real Groth16 proof
+    // Parse the Groth16 proof
     let zk_proof = ZkIdentityProof::from_base64(proof)
         .map_err(|e| nonos_types::NonosError::Config(format!("Invalid proof format: {}", e)))?;
 
-    // Perform REAL cryptographic verification
+    // Cryptographic verification
     println!("\x1b[38;5;245mVerifying Groth16 proof...\x1b[0m");
 
     let valid = verify_identity_proof(&zk_proof)
