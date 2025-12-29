@@ -4,7 +4,7 @@
 
 //! Configuration Module
 //!
-//! Provides production-grade configuration management with:
+//! Provides configuration management with:
 //! - Safe defaults (localhost-only API binding)
 //! - Comprehensive validation
 //! - Environment variable overrides
@@ -117,7 +117,7 @@ impl std::fmt::Display for BootstrapMode {
     }
 }
 
-/// Node configuration with safe production defaults
+/// Node configuration with safe defaults
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NodeConfig {
@@ -330,6 +330,25 @@ pub struct RateLimitConfig {
     pub p2p_burst_size: u32,
 }
 
+/// Security warning severity
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WarningSeverity {
+    /// Critical security issue - must fix
+    High,
+    /// Moderate security concern
+    Medium,
+    /// Minor suggestion
+    Low,
+}
+
+/// Security configuration warning
+#[derive(Clone, Debug)]
+pub struct SecurityWarning {
+    pub severity: WarningSeverity,
+    pub message: String,
+    pub recommendation: String,
+}
+
 // ===== Default Implementations =====
 
 impl Default for NodeConfig {
@@ -429,7 +448,8 @@ impl Default for SecurityConfig {
             auto_update: false,
             update_channel: UpdateChannel::Stable,
             encrypted_storage: false,
-            api_auth_required: false,
+            // Auth required by default for security - must explicitly disable
+            api_auth_required: true,
             api_auth_token: None,
         }
     }
@@ -672,6 +692,99 @@ impl NodeConfig {
         }
 
         Ok(())
+    }
+
+    /// Check for insecure configuration and log warnings
+    /// Call this on startup to alert operators
+    pub fn check_security_warnings(&self) -> Vec<SecurityWarning> {
+        let mut warnings = Vec::new();
+
+        // Check API authentication
+        if !self.security.api_auth_required {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::High,
+                message: "API authentication is disabled. Anyone can access the API.".into(),
+                recommendation: "Set api_auth_required = true and configure NONOS_API_TOKEN.".into(),
+            });
+        } else if self.security.api_auth_token.is_none() {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::High,
+                message: "API auth required but no token configured.".into(),
+                recommendation: "Set NONOS_API_TOKEN environment variable or api_auth_token in config.".into(),
+            });
+        }
+
+        // Check API binding
+        if !self.api_is_localhost_only() {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::Medium,
+                message: format!("API server bound to non-localhost address: {}", self.api.bind_address),
+                recommendation: "Ensure firewall rules restrict access. Use localhost binding if possible.".into(),
+            });
+        }
+
+        // Check rate limiting
+        if !self.rate_limits.enabled {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::Medium,
+                message: "Rate limiting is disabled.".into(),
+                recommendation: "Enable rate limiting to prevent abuse: rate_limits.enabled = true".into(),
+            });
+        }
+
+        // Check encrypted storage config
+        // NOTE: The encrypted_storage option currently has no effect because:
+        // 1. The encrypted-storage feature must be compiled in
+        // 2. Key management for storage encryption is not yet implemented
+        // We warn users that this option is not functional to avoid false security assumptions.
+        if self.security.encrypted_storage {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::Medium,
+                message: "encrypted_storage is set but storage encryption is not fully implemented.".into(),
+                recommendation: "Storage encryption requires additional setup. Secrets are stored unencrypted.".into(),
+            });
+        }
+
+        // Check bootstrap mode
+        if matches!(self.network.bootstrap_mode, BootstrapMode::None) {
+            warnings.push(SecurityWarning {
+                severity: WarningSeverity::Low,
+                message: "Bootstrap mode is 'none'. Node will not auto-connect to network.".into(),
+                recommendation: "Use 'official' or 'custom' bootstrap mode for normal operation.".into(),
+            });
+        }
+
+        warnings
+    }
+
+    /// Log all security warnings at appropriate levels
+    pub fn log_security_warnings(&self) {
+        let warnings = self.check_security_warnings();
+        if warnings.is_empty() {
+            info!("Security check passed - no warnings");
+            return;
+        }
+
+        for warning in &warnings {
+            match warning.severity {
+                WarningSeverity::High => {
+                    warn!("SECURITY: {}", warning.message);
+                    warn!("  → {}", warning.recommendation);
+                }
+                WarningSeverity::Medium => {
+                    warn!("{}", warning.message);
+                    info!("  → {}", warning.recommendation);
+                }
+                WarningSeverity::Low => {
+                    info!("Note: {}", warning.message);
+                }
+            }
+        }
+
+        let high_count = warnings.iter().filter(|w| matches!(w.severity, WarningSeverity::High)).count();
+        if high_count > 0 {
+            warn!("⚠️  {} high-severity security warning(s). Review configuration.", high_count);
+        }
     }
 
     /// Get API socket address
