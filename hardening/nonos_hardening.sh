@@ -49,18 +49,14 @@ echo -e "${GREEN}[*]${NC} Detected: $OS $VERSION"
 echo -e "${GREEN}[*]${NC} Hardening started at $(date)"
 echo ""
 
-# Configurable SSH port (default: high port for security)
-SSH_PORT=${NONOS_SSH_PORT:-54222}
+# Port configuration
+SSH_PORT=54222
 NONOS_API_PORT=${NONOS_API_PORT:-8420}
 NONOS_P2P_PORT=${NONOS_P2P_PORT:-9420}
 
-echo -e "${RED}[!] IMPORTANT: SSH will be moved to port $SSH_PORT${NC}"
-echo -e "${RED}[!] After this script, connect with: ssh -p $SSH_PORT user@server${NC}"
-echo -e "${YELLOW}[!] NONOS API port: $NONOS_API_PORT${NC}"
-echo -e "${YELLOW}[!] NONOS P2P port: $NONOS_P2P_PORT${NC}"
-echo ""
-echo -e "${YELLOW}Make sure you have another terminal open before continuing!${NC}"
-read -p "Press ENTER to continue or Ctrl+C to abort..."
+echo -e "${GREEN}[*]${NC} SSH Port: $SSH_PORT (port 22 kept as backup)"
+echo -e "${GREEN}[*]${NC} NONOS API port: $NONOS_API_PORT"
+echo -e "${GREEN}[*]${NC} NONOS P2P port: $NONOS_P2P_PORT"
 echo ""
 
 ########################################################
@@ -68,24 +64,23 @@ echo ""
 ########################################################
 echo -e "${GREEN}[1/15]${NC} Updating system and installing essentials..."
 
-apt update && apt full-upgrade -y
-apt install -y ufw fail2ban curl vim auditd unattended-upgrades \
+export DEBIAN_FRONTEND=noninteractive
+apt-get update && apt-get full-upgrade -y
+apt-get install -y ufw fail2ban curl vim auditd unattended-upgrades \
     net-tools lsof gnupg2 bash-completion htop iotop
 
 echo -e "${GREEN}[+]${NC} System updated."
 
 ########################################################
-# 2. SSH Hardening (SAFE - keeps password auth)
+# 2. SSH Hardening (keeps port 22, password auth enabled)
 ########################################################
-echo -e "${GREEN}[2/15]${NC} Hardening SSH (keeping password auth enabled)..."
+echo -e "${GREEN}[2/15]${NC} Hardening SSH..."
 
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.$(date +%Y%m%d)
 
-# Safe SSH hardening - DO NOT disable password auth
 cat > /etc/ssh/sshd_config.d/99-nonos-hardening.conf <<EOF
 # NONOS SSH Hardening
-# Password authentication ENABLED for safety
-
+Port 22
 Port $SSH_PORT
 PermitRootLogin yes
 PasswordAuthentication yes
@@ -102,11 +97,10 @@ EOF
 
 echo "Authorized access only. Disconnect immediately if unauthorized." > /etc/issue.net
 
-# Test SSH config before reloading
+# Test SSH config before restarting
 if sshd -t; then
-    # Ubuntu 24.04 uses 'ssh', older versions use 'sshd'
-    systemctl reload ssh 2>/dev/null || systemctl reload sshd
-    echo -e "${GREEN}[+]${NC} SSH hardened on port $SSH_PORT (password auth enabled)."
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+    echo -e "${GREEN}[+]${NC} SSH hardened (password auth enabled)."
 else
     echo -e "${RED}[!]${NC} SSH config error - reverting"
     rm -f /etc/ssh/sshd_config.d/99-nonos-hardening.conf
@@ -118,11 +112,16 @@ fi
 ########################################################
 echo -e "${GREEN}[3/15]${NC} Configuring firewall..."
 
+# CRITICAL: Allow SSH FIRST before doing anything else
+ufw allow 22/tcp comment 'SSH Backup'
+ufw allow $SSH_PORT/tcp comment 'SSH'
+
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 
-# SSH
+# SSH (both ports - 22 as backup, 54222 as primary)
+ufw allow 22/tcp comment 'SSH Backup'
 ufw allow $SSH_PORT/tcp comment 'SSH'
 
 # NONOS ports
@@ -149,7 +148,7 @@ banaction = ufw
 
 [sshd]
 enabled = true
-port = $SSH_PORT
+port = 22,$SSH_PORT
 filter = sshd
 logpath = /var/log/auth.log
 maxretry = 5
@@ -182,10 +181,6 @@ net.ipv4.tcp_syncookies = 1
 net.ipv4.conf.all.log_martians = 1
 net.ipv4.icmp_echo_ignore_broadcasts = 1
 net.ipv4.icmp_ignore_bogus_error_responses = 1
-
-# IPv6 (disable if not needed)
-# net.ipv6.conf.all.disable_ipv6 = 1
-# net.ipv6.conf.default.disable_ipv6 = 1
 
 # System protections
 fs.suid_dumpable = 0
@@ -322,7 +317,7 @@ mkdir -p /var/log/nonos
 echo -e "${GREEN}[+]${NC} Log rotation configured."
 
 ########################################################
-# 12. Create NONOS User (optional)
+# 12. Create NONOS User
 ########################################################
 echo -e "${GREEN}[12/15]${NC} Creating nonos service user..."
 
@@ -346,11 +341,11 @@ chmod 700 /var/lib/nonos
 echo -e "${GREEN}[+]${NC} NONOS directories created."
 
 ########################################################
-# 14. Install Useful Monitoring Tools
+# 14. Install Monitoring Tools
 ########################################################
 echo -e "${GREEN}[14/15]${NC} Installing monitoring tools..."
 
-apt install -y htop iotop nethogs iftop vnstat -y 2>/dev/null || true
+apt-get install -y htop iotop nethogs iftop vnstat 2>/dev/null || true
 
 echo -e "${GREEN}[+]${NC} Monitoring tools installed."
 
@@ -364,7 +359,7 @@ echo "============================================================="
 echo -e "${GREEN}SECURITY STATUS${NC}"
 echo "============================================================="
 echo ""
-echo -e "SSH Port:        ${GREEN}$SSH_PORT${NC}"
+echo -e "SSH Port:        ${GREEN}$SSH_PORT${NC} (22 as backup)"
 echo -e "SSH Password:    ${GREEN}ENABLED${NC} (you won't be locked out)"
 echo -e "Firewall:        ${GREEN}$(ufw status | head -1)${NC}"
 echo -e "Fail2Ban:        ${GREEN}$(systemctl is-active fail2ban)${NC}"
