@@ -1,0 +1,12 @@
+/target
+node_modules
+.DS_Store
+*.log
+.env
+/ui/build
+/ui/.svelte-kit
+/ui/node_modules
+/ui/src-tauri/target
+*.swp
+*.swo
+.idea
