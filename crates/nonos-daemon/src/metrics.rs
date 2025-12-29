@@ -4,7 +4,7 @@
 
 //! Metrics Module
 //!
-//! Production-grade metrics collection with:
+//! Metrics collection with:
 //! - Lock-free atomic counters for high performance
 //! - Histogram support for latency tracking
 //! - Full Prometheus exposition format
