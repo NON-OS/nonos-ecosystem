@@ -90,11 +90,19 @@ pub async fn run_node(
     let api_addr: std::net::SocketAddr = format!("{}:{}", config.api.bind_address, config.api.port)
         .parse()
         .unwrap_or_else(|_| "127.0.0.1:8420".parse().unwrap());
+
+    // Log security configuration
+    config.log_security_warnings();
+
     let api_server = ApiServer::with_privacy(
         api_addr,
         node.clone(),
         metrics_collector.clone(),
         privacy_manager.clone(),
+        config.security.api_auth_token.clone(),
+        config.security.api_auth_required,
+        config.rate_limits.requests_per_second,
+        config.rate_limits.burst_size,
     );
     tokio::spawn(async move {
         if let Err(e) = api_server.start().await {
