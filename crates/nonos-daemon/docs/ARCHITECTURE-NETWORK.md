@@ -1,98 +1,70 @@
-# NONOS Network Architecture
+# Network Architecture
 
-This document describes how the NONOS daemon operates as a decentralized P2P network node.
+The NONOS daemon runs a libp2p-based P2P network. This doc covers how it works.
 
-## Overview
+## Stack
 
-The NONOS daemon implements a decentralized peer-to-peer network using libp2p. Each node can operate in one of three roles with configurable bootstrap modes, forming a resilient mesh network for privacy-preserving operations.
+| Protocol | Purpose |
+|----------|---------|
+| TCP | Transport |
+| Noise XX | Encryption |
+| Yamux | Multiplexing |
+| Gossipsub | Pub/sub messaging |
+| Kademlia | Peer discovery via DHT |
+| Identify | Capability exchange |
+| Ping | Liveness |
 
-## Network Stack
+All connections use Noise encryption. The XX handshake provides mutual authentication.
 
-### Transport Layer
-
-The network uses libp2p with the following protocols:
-
-- **TCP Transport**: Primary transport for peer connections
-- **Noise Protocol**: Encrypted communication using the XX handshake pattern
-- **Yamux**: Stream multiplexing for concurrent connections
-- **Gossipsub**: Pub/sub messaging for network-wide announcements
-- **Kademlia DHT**: Distributed hash table for peer discovery
-- **Identify**: Protocol for peer identification and capability exchange
-- **Ping**: Liveness detection for connected peers
-
-### Node Roles
-
-Nodes operate in one of three roles with different connection limits:
-
-| Role | Max Peers | Description |
-|------|-----------|-------------|
-| **Local** | 25 | End-user nodes with minimal resource requirements |
-| **Relay** | 100 | Intermediate nodes that help route traffic |
-| **Backbone** | 500 | Infrastructure nodes that maintain network stability |
-
-Configure the role in `config.toml`:
+## Node Roles
 
 ```toml
 [network]
-role = "local"  # Options: local, relay, backbone
+role = "local"  # local, relay, or backbone
 ```
 
-### Bootstrap Modes
+| Role | Max Peers | Use Case |
+|------|-----------|----------|
+| Local | 25 | End users |
+| Relay | 100 | Traffic routing, moderate resources |
+| Backbone | 500 | Infrastructure, requires static IP |
 
-Three bootstrap modes control how nodes discover the network:
+The role sets connection limits. Relay and backbone nodes help route traffic for NAT'd local nodes.
 
-| Mode | Description |
-|------|-------------|
-| **Official** | Connect to NONOS official bootstrap nodes (default) |
-| **Custom** | Use only user-specified bootstrap peers |
-| **None** | No bootstrap - for isolated/lab networks |
+## Bootstrap
+
+Three modes:
 
 ```toml
 [network]
-bootstrap_mode = "official"
+bootstrap_mode = "official"  # official, custom, or none
 
-# For custom mode:
-# bootstrap_mode = "custom"
 # custom_bootstrap_nodes = [
-#     "/ip4/192.168.1.100/tcp/9432/p2p/12D3KooW..."
+#     "/ip4/x.x.x.x/tcp/9432/p2p/12D3KooW..."
 # ]
 ```
 
-## Message Flow
+**official** - NONOS-operated bootstrap nodes. Fast but centralized.
+**custom** - Your own bootstrap nodes. Decentralized if you run multiple.
+**none** - No bootstrap. For lab networks with mDNS.
 
-### Inbound Message Processing
+For decentralized operation, run custom mode with bootstrap nodes from independent operators.
 
-All inbound messages pass through multiple safety layers:
+## Message Handling
 
-```
-Receive Message
-    │
-    ├─► Ban Check
-    │   └─► Drop if peer is banned
-    │
-    ├─► Size Check (64KB max)
-    │   └─► Penalty + potential ban if oversized
-    │
-    ├─► Rate Limit Check
-    │   └─► Token bucket per peer (100 msg/sec default)
-    │   └─► Penalty for violations
-    │
-    ├─► Spam Detection
-    │   └─► Auto-ban for >50 msg/sec sustained
-    │
-    └─► Forward to Handler
-```
+Inbound messages go through these checks in order:
 
-### Rate Limiting
+1. **Ban check** - drop if peer banned
+2. **Size check** - 64KB max, penalty if exceeded
+3. **Rate limit** - token bucket per peer
+4. **Spam detection** - auto-ban at 50 msg/sec sustained
+5. **Handler dispatch**
 
-Per-peer rate limiting uses a token bucket algorithm:
+Messages that fail checks get dropped and the peer takes a penalty.
 
-- **Default rate**: 100 messages/second
-- **Burst capacity**: 2x rate (200 messages)
-- **Byte limit**: 1 MB/second
-- **Refill rate**: Continuous based on elapsed time
+## Rate Limiting
 
-Configure in `config.toml`:
+Token bucket per peer:
 
 ```toml
 [rate_limit]
@@ -101,35 +73,40 @@ p2p_messages_per_second = 100
 p2p_burst_size = 200
 ```
 
-### Penalty System
+The bucket refills continuously. Burst allows temporary spikes.
 
-Violations accumulate penalty scores that affect peer reputation:
+## Reputation & Banning
 
-| Violation | Base Penalty | Repeat Multiplier |
-|-----------|-------------|-------------------|
-| Oversized Message | 15 | 2x |
-| Decode Failure | 10 | 1x |
-| Malformed Content | 20 | 3x |
-| Unexpected Type | 5 | 1x |
-| Rate Limit Exceeded | 10 | 2x |
-| Spam Behavior | 25 | 4x |
-| Protocol Violation | 30 | 5x |
+Violations add to a penalty score:
 
-**Auto-ban triggers:**
-- Reputation drops below -50
-- 10+ total violations
-- Penalty score reaches 100
-- Immediate for protocol violations or spam
+| Violation | Penalty |
+|-----------|---------|
+| Oversized message | 15 |
+| Decode failure | 10 |
+| Malformed content | 20 |
+| Rate limit hit | 10 |
+| Spam behavior | 25 |
+| Protocol violation | 30 |
 
-**Ban durations:**
-- First offense: 5 minutes
-- Repeat offender: 30 minutes
-- Spam behavior: 1 hour
-- Protocol violation: 100 minutes
+Repeat offenders get multiplied penalties (2x-5x depending on type).
+
+**Ban triggers:**
+- Reputation below -50
+- 10+ violations
+- Penalty score >= 100
+- Protocol violations (immediate)
+
+**Ban duration:**
+- Normal: 5 minutes
+- Repeat: 30 minutes
+- Spam: 1 hour
+- Protocol: 100 minutes
+
+Bans expire automatically. The peer can reconnect after expiry.
 
 ## Peer Store
 
-The `PeerStore` maintains peer metadata and reputation:
+Each peer has:
 
 ```rust
 PeerEntry {
@@ -143,40 +120,16 @@ PeerEntry {
 }
 ```
 
-### Quality Scoring
+Quality score weights:
+- Latency: 30%
+- Success rate: 40%
+- Uptime: 30%
 
-Quality score affects peer selection priority:
+Peer selection filters out banned and low-reputation peers, then sorts by quality.
 
-- **Latency weight**: 30% - Lower latency = higher score
-- **Success rate weight**: 40% - Successful interactions
-- **Uptime weight**: 30% - Connection stability
+## Topics
 
-### Peer Selection
-
-When selecting peers for operations:
-
-1. Filter out banned peers
-2. Filter peers with reputation < 0
-3. Sort by quality score
-4. Apply role-based limits
-
-## Network Events
-
-The daemon emits events for network state changes:
-
-| Event | Description |
-|-------|-------------|
-| `PeerConnected` | New peer connection established |
-| `PeerDisconnected` | Peer connection closed |
-| `Message` | Message received on a topic |
-| `PeerDiscovered` | New peer found via DHT |
-| `PingResult` | Latency measurement completed |
-| `RateLimited` | Peer hit rate limit |
-| `PeerBanned` | Peer was banned |
-
-## Gossipsub Topics
-
-The network uses topic-based pub/sub for different message types:
+Gossipsub topics:
 
 | Topic | Purpose |
 |-------|---------|
@@ -185,25 +138,18 @@ The network uses topic-based pub/sub for different message types:
 | `/nonos/peers/1.0.0` | Peer exchange |
 | `/nonos/privacy/1.0.0` | Privacy service coordination |
 
-## DHT Operations
+Subscribe to topics on connection. Messages propagate across subscribed peers.
 
-Kademlia DHT is used for:
+## DHT
 
-1. **Peer Discovery**: Find nodes by ID
-2. **Content Routing**: Locate service providers
-3. **Bootstrap**: Initial network join
+Kademlia DHT for:
+- Finding peers by ID
+- Locating service providers
+- Bootstrap queries
 
-DHT queries have built-in retry with exponential backoff:
+Queries retry with exponential backoff: 1s, 2s, 4s, 8s, 16s (max 5 attempts).
 
-- Initial delay: 1 second
-- Max delay: 60 seconds
-- Max attempts: 5
-
-## Connection Management
-
-### Connection Limits
-
-Configurable connection limits per role:
+## Connections
 
 ```toml
 [network]
@@ -212,61 +158,41 @@ max_inbound = 50
 max_outbound = 50
 ```
 
-### Connection Lifecycle
+New connections go through:
+1. Ban list check
+2. Connection limit check
+3. Identify exchange
+4. Peer store update
+5. Topic subscription
 
-```
-New Connection
-    │
-    ├─► Check ban list
-    ├─► Check connection limits
-    ├─► Identify exchange
-    ├─► Add to peer store
-    └─► Subscribe to topics
-```
-
-### Graceful Disconnect
-
-When disconnecting:
-
+Disconnect cleanup:
 1. Send disconnect notification
-2. Clean up rate limiters
+2. Remove rate limiter state
 3. Update peer store
-4. Remove from active peers
+4. Remove from active list
 
-## Security Considerations
+## Security
 
-### Message Validation
+**Message validation:**
+- Size limit (64KB)
+- Format validation
+- Signature check where applicable
+- Timestamp freshness
 
-All messages are validated before processing:
+**DoS protection:**
+- Per-peer rate limiting
+- Connection limits
+- Auto-ban on violations
+- Circuit breaker for failing peers
 
-- **Size check**: Reject > 64KB
-- **Format check**: Valid protobuf/JSON
-- **Signature check**: For signed messages
-- **Timestamp check**: Reject stale messages
-
-### DDoS Protection
-
-Built-in protections against denial of service:
-
-1. Per-peer rate limiting
-2. Connection limits
-3. Auto-ban for violations
-4. Circuit breaker for failing peers
-
-### Privacy
-
-Network-level privacy measures:
-
-- No IP logging by default
+**Privacy:**
 - Encrypted connections (Noise)
-- Peer ID rotation support
-- Mixnet integration for traffic analysis resistance
+- Optional peer ID rotation
+- No IP logging by default
 
-## Monitoring
+## Metrics
 
-### Metrics
-
-Network metrics exposed via Prometheus:
+Prometheus metrics on `/api/metrics/prometheus`:
 
 ```
 nonos_p2p_peer_count
@@ -281,40 +207,32 @@ nonos_p2p_connection_attempts_total
 nonos_p2p_connection_failures_total
 ```
 
-### Health Checks
-
-Network health available at `/api/health`:
+Health check at `/api/health`:
 
 ```json
 {
   "healthy": true,
   "status": "Running",
-  "peer_count": 42,
-  "connection_rate": 0.95
+  "peer_count": 42
 }
 ```
 
 ## Troubleshooting
 
-### Common Issues
-
-**No peers connecting:**
-- Check firewall allows port 9432 (default)
-- Verify bootstrap mode is not "none"
+**No peers:**
+- Check port 9432 is open
+- Verify bootstrap_mode isn't "none"
 - Check network connectivity
 
 **High rate limit hits:**
-- Check for misbehaving peers
-- Increase `p2p_messages_per_second` if legitimate
+- Review which peers are triggering limits
+- Increase limit if traffic is legitimate
 
 **Peers getting banned:**
-- Review logs for violation types
-- Check for network attacks
-- Verify message sizes are within limits
+- Check logs for violation types
+- Look for attack patterns
 
-### Debug Logging
-
-Enable debug logging for network:
+Debug logging:
 
 ```bash
 RUST_LOG=nonos_daemon::p2p=debug ./nonos-daemon
