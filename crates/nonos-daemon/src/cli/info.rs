@@ -4,6 +4,7 @@
 
 use super::commands::OutputFormat;
 use super::utils::print_banner;
+use libp2p::{identity::Keypair, PeerId};
 use nonos_daemon::NodeConfig;
 use nonos_types::{EthAddress, NonosResult};
 use std::path::PathBuf;
@@ -40,14 +41,19 @@ pub async fn show_info(
         NodeConfig::default()
     };
 
-    let identity_path = data_dir.join("identity");
-    let node_id = if identity_path.exists() {
-        let bytes = std::fs::read(&identity_path)
-            .map_err(|e| nonos_types::NonosError::Config(format!("Failed to read identity: {}", e)))?;
-        let hash = blake3::hash(&bytes);
-        format!("{}", hash.to_hex())
+    // Load P2P identity to get the real PeerId (used for bootstrap multiaddrs)
+    let p2p_identity_path = data_dir.join("p2p_identity.key");
+    let (peer_id, peer_id_short) = if p2p_identity_path.exists() {
+        let key_bytes = std::fs::read(&p2p_identity_path)
+            .map_err(|e| nonos_types::NonosError::Config(format!("Failed to read P2P identity: {}", e)))?;
+        let keypair = Keypair::from_protobuf_encoding(&key_bytes)
+            .map_err(|e| nonos_types::NonosError::Config(format!("Invalid P2P identity: {}", e)))?;
+        let peer_id = PeerId::from(keypair.public());
+        let full = peer_id.to_string();
+        let short = format!("{}...{}", &full[..8], &full[full.len()-6..]);
+        (full, short)
     } else {
-        "Not initialized".to_string()
+        ("Not initialized".to_string(), "Not initialized".to_string())
     };
 
     let nickname_path = data_dir.join("nickname");
@@ -68,12 +74,22 @@ pub async fn show_info(
         0
     };
 
+    // Generate bootstrap multiaddr for this node
+    let p2p_port = config.port;
+    let bootstrap_addr = if peer_id != "Not initialized" {
+        format!("/ip4/<YOUR_IP>/tcp/{}/p2p/{}", p2p_port, peer_id)
+    } else {
+        "Not available".to_string()
+    };
+
     match format {
         OutputFormat::Json => {
             let info = serde_json::json!({
                 "version": BUILD_VERSION,
                 "target": BUILD_TARGET,
-                "node_id": node_id,
+                "peer_id": peer_id,
+                "bootstrap_multiaddr": bootstrap_addr,
+                "p2p_port": p2p_port,
                 "config_path": config_path.to_string_lossy(),
                 "data_dir": data_dir.to_string_lossy(),
                 "nickname": nickname,
@@ -84,11 +100,17 @@ pub async fn show_info(
         }
         OutputFormat::Text => {
             println!("\x1b[38;5;46mNONOS Daemon Information\x1b[0m");
-            println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(60));
+            println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(70));
             println!();
             println!("Version:        \x1b[38;5;51m{}\x1b[0m", BUILD_VERSION);
             println!("Build Target:   \x1b[38;5;245m{}\x1b[0m", BUILD_TARGET);
-            println!("Node ID:        \x1b[38;5;226m{}\x1b[0m", node_id);
+            println!("Peer ID:        \x1b[38;5;226m{}\x1b[0m", peer_id_short);
+            println!("Full Peer ID:   \x1b[38;5;245m{}\x1b[0m", peer_id);
+            println!("P2P Port:       \x1b[38;5;51m{}\x1b[0m", p2p_port);
+            println!();
+            println!("\x1b[38;5;46mBootstrap Multiaddr (replace <YOUR_IP>):\x1b[0m");
+            println!("  \x1b[38;5;51m{}\x1b[0m", bootstrap_addr);
+            println!();
             println!("Config:         \x1b[38;5;245m{:?}\x1b[0m", config_path);
             println!("Data Dir:       \x1b[38;5;245m{:?}\x1b[0m", data_dir);
             if let Some(ref name) = nickname {
@@ -99,7 +121,7 @@ pub async fn show_info(
             }
             println!("ZK Identities:  \x1b[38;5;46m{}\x1b[0m", identity_count);
             println!();
-            println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(60));
+            println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(70));
         }
     }
 
