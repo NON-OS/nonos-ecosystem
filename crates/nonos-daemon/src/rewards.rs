@@ -1,7 +1,7 @@
 // NONOS GNU AFFERO GENERAL PUBLIC LICENSE
 // Version 3, 19 November 2007
 //
-// Copyright (C) 2025 NON-OS <team@nonos.systems>
+// Copyright (C) 2024 NON-OS <team@nonos.systems>
 // https://nonos.systems
 //
 // This program is free software: you can redistribute it and/or modify
