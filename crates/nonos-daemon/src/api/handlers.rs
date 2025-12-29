@@ -12,7 +12,7 @@ use crate::contracts::ContractClient;
 use crate::rewards::RewardTracker;
 use crate::{Node, NodeMetricsCollector, PrivacyServiceManager, PrometheusExporter};
 use nonos_types::{EthAddress, NodeStatus, NonosError, NonosResult};
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -96,7 +96,8 @@ pub async fn handle_request(
     }
 
     let headers = RequestHeaders::parse(&header_lines);
-    let client_ip = headers.real_ip(peer_addr.ip());
+    // Get real client IP, only trusting X-Forwarded-For from configured trusted proxies
+    let client_ip = headers.real_ip(peer_addr.ip(), &api_context.trusted_proxies);
 
     // Check rate limit
     match api_context.rate_limiter.check_request(client_ip) {
