@@ -104,7 +104,8 @@ echo "Authorized access only. Disconnect immediately if unauthorized." > /etc/is
 
 # Test SSH config before reloading
 if sshd -t; then
-    systemctl reload sshd
+    # Ubuntu 24.04 uses 'ssh', older versions use 'sshd'
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd
     echo -e "${GREEN}[+]${NC} SSH hardened on port $SSH_PORT (password auth enabled)."
 else
     echo -e "${RED}[!]${NC} SSH config error - reverting"
