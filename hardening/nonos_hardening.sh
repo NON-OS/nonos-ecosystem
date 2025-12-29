@@ -78,21 +78,16 @@ echo -e "${GREEN}[2/15]${NC} Hardening SSH..."
 
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.$(date +%Y%m%d)
 
-# Comment out any Port line in main config so our drop-in takes full control
-sed -i 's/^[[:space:]]*Port /#Port /' /etc/ssh/sshd_config
+# Remove any existing Port lines
+sed -i '/^[[:space:]]*Port /d' /etc/ssh/sshd_config
+sed -i '/^#Port /d' /etc/ssh/sshd_config
 
-# Also add ports directly to main config as backup (in case drop-in doesn't work)
-if ! grep -q "^Port 22$" /etc/ssh/sshd_config && ! grep -q "^Port $SSH_PORT$" /etc/ssh/sshd_config; then
-    echo "" >> /etc/ssh/sshd_config
-    echo "# NONOS: Listen on both ports" >> /etc/ssh/sshd_config
-    echo "Port 22" >> /etc/ssh/sshd_config
-    echo "Port $SSH_PORT" >> /etc/ssh/sshd_config
-fi
+# Add ports right after Include line (this is the correct location)
+sed -i '/^Include \/etc\/ssh\/sshd_config.d\/\*.conf/a Port 22\nPort '"$SSH_PORT" /etc/ssh/sshd_config
 
+# Create drop-in for other hardening settings (not ports)
 cat > /etc/ssh/sshd_config.d/99-nonos-hardening.conf <<EOF
 # NONOS SSH Hardening
-Port 22
-Port $SSH_PORT
 PermitRootLogin yes
 PasswordAuthentication yes
 PermitEmptyPasswords no
