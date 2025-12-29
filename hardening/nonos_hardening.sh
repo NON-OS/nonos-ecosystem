@@ -105,6 +105,9 @@ echo "Authorized access only. Disconnect immediately if unauthorized." > /etc/is
 
 # Test SSH config before restarting
 if sshd -t; then
+    # Ubuntu with systemd socket activation requires these commands
+    systemctl daemon-reload
+    systemctl restart ssh.socket 2>/dev/null || true
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
     echo -e "${GREEN}[+]${NC} SSH hardened (password auth enabled)."
 else
