@@ -38,15 +38,8 @@ impl Default for NetworkConfig {
 
 impl NetworkConfig {
     pub const OFFICIAL_BOOTSTRAP_NODES: &'static [&'static str] = &[
-        "/dns4/boot1.nonos.systems/tcp/9432/p2p/12D3KooWAHtxSqGkTbpYjmJW55BpScGkezkWF3sQBK7Pv3CHjTPE",
-        "/dns4/boot2.nonos.systems/tcp/9432/p2p/12D3KooWBHvsSSKHeM9qGqMgytQ3K9SKvGfX4GhBxHF9ysQ3QKZJ",
-        "/dns4/boot3.nonos.systems/tcp/9432/p2p/12D3KooWCNxuPgPx8ZSEcVKwT4xPL9vZWNJr4d3GwPJdQBTRZsrV",
-        "/dns4/boot-eu.nonos.systems/tcp/9432/p2p/12D3KooWDrX4KaVmGwHj7LYJMh9fEqNjMRoP8cXkJSa1qVwYN2ZF",
-        "/dns4/boot-us.nonos.systems/tcp/9432/p2p/12D3KooWEVS8nQr5bN7J9G4TFqGKMHEGgZ3cV8dQpTyH8zk5QRBM",
-        "/dns4/boot-asia.nonos.systems/tcp/9432/p2p/12D3KooWFWUYLJhp6fT5F9mH3TJvpnYdJ1r4TK9dQz2z9KPJ7MqX",
-        "/ip4/5.255.99.170/tcp/9432/p2p/12D3KooWAHtxSqGkTbpYjmJW55BpScGkezkWF3sQBK7Pv3CHjTPE",
-        "/ip4/185.199.96.23/tcp/9432/p2p/12D3KooWBHvsSSKHeM9qGqMgytQ3K9SKvGfX4GhBxHF9ysQ3QKZJ",
-        "/ip4/45.76.134.82/tcp/9432/p2p/12D3KooWCNxuPgPx8ZSEcVKwT4xPL9vZWNJr4d3GwPJdQBTRZsrV",
+        // Node 1 - South Africa
+        "/ip4/102.211.56.24/tcp/9432/p2p/12D3KooWD3x5mMCRUVi5HS8A2NR6J2344wRt45ewzwq58bjKuAuu",
     ];
 
     pub fn bootstrap_peers(&self) -> Vec<String> {
