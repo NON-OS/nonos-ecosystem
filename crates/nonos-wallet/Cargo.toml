@@ -1,0 +1,28 @@
+[package]
+name = "nonos-wallet"
+description = "NONOS - Secure wallet with BLAKE3-based key derivation and stealth addresses"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+nonos-types = { workspace = true }
+nonos-crypto = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+zeroize = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+ethers = { workspace = true }
+sled = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
