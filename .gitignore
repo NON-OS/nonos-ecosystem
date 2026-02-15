@@ -1,0 +1,35 @@
+# Build artifacts
+/target
+/dist
+node_modules
+/ui/build
+/ui/.svelte-kit
+/ui/node_modules
+/ui/src-tauri/target
+
+# Foundry/Forge artifacts
+/contracts/out
+/contracts/cache
+/contracts/broadcast
+
+# IDE/Editor
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Environment/Secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Logs
+*.log
+
+# Misc
+~
