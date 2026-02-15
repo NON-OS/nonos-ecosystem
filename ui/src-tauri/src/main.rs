@@ -1950,11 +1950,18 @@ async fn browser_navigate(
 
     let window_label = format!("browser-{}", tab_id);
 
+    // Route through local proxy when connected to Anyone Network
+    let browser_url = if is_connected {
+        format!("http://localhost:{}/proxy?url={}", LOCAL_PROXY_PORT, urlencoding::encode(&target_url))
+    } else {
+        target_url.clone()
+    };
+
     // Create the browser window (underscore prefix to suppress unused warning - window kept for lifetime)
     let _browser_window = tauri::WindowBuilder::new(
         &app_handle,
         &window_label,
-        tauri::WindowUrl::External(target_url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
+        tauri::WindowUrl::External(browser_url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
     )
     .title(format!("NONOS - {}", if is_connected { "Secure" } else { "Direct" }))
     .inner_size(1200.0, 800.0)
