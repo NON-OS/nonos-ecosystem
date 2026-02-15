@@ -134,9 +134,9 @@ fn print_ready_message(node_id: nonos_types::NodeId, api_addr: std::net::SocketA
     println!("\x1b[38;5;46m║\x1b[0m  \x1b[1;38;5;46mNONOS Daemon is now running!\x1b[0m                                \x1b[38;5;46m║\x1b[0m");
     println!("\x1b[38;5;46m╠══════════════════════════════════════════════════════════════╣\x1b[0m");
     let id_str = node_id.to_string();
-    let display_id = if id_str.len() > 24 { &id_str[..24] } else { &id_str };
-    println!("\x1b[38;5;46m║\x1b[0m  Node ID: \x1b[38;5;226m{:<24}\x1b[0m...               \x1b[38;5;46m║\x1b[0m", display_id);
-    println!("\x1b[38;5;46m║\x1b[0m  API: \x1b[38;5;51mhttp://{:<40}\x1b[0m    \x1b[38;5;46m║\x1b[0m", api_addr);
+    let display_id = if id_str.len() > 20 { &id_str[..20] } else { &id_str };
+    println!("\x1b[38;5;46m║\x1b[0m  Node ID: \x1b[38;5;226m{:<20}\x1b[0m                          \x1b[38;5;46m║\x1b[0m", display_id);
+    println!("\x1b[38;5;46m║\x1b[0m  API:     \x1b[38;5;51mhttp://{:<36}\x1b[0m  \x1b[38;5;46m║\x1b[0m", api_addr);
     println!("\x1b[38;5;46m╠══════════════════════════════════════════════════════════════╣\x1b[0m");
     println!("\x1b[38;5;46m║\x1b[0m  \x1b[38;5;207mServices Active:\x1b[0m                                            \x1b[38;5;46m║\x1b[0m");
     println!("\x1b[38;5;46m║\x1b[0m    \x1b[38;5;46m[+]\x1b[0m ZK Identity Engine                                    \x1b[38;5;46m║\x1b[0m");
