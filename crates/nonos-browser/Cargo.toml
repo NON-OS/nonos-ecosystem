@@ -1,0 +1,37 @@
+[package]
+name = "nonos-browser"
+description = "NONOS Ecosystem - Privacy-first trustless browser powered by community nodes"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "nonos-browser"
+path = "src/main.rs"
+
+[dependencies]
+nonos-types = { workspace = true }
+nonos-crypto = { workspace = true }
+nonos-wallet = { workspace = true }
+nonos-anyone = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[build-dependencies]
+# CEF bindings will be added here
