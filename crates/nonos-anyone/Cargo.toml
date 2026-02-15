@@ -1,0 +1,27 @@
+[package]
+name = "nonos-anyone"
+description = "NONOS - Native Anyone Network integration (manages anon binary)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+nonos-types = { workspace = true }
+nonos-crypto = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+dirs = "5.0"
+
+[dev-dependencies]
+proptest = { workspace = true }
