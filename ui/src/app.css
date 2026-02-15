@@ -1,0 +1,381 @@
+/* NONOS Ecosystem Browser - Global Styles
+ * Copyright (c) 2024 NON-OS <team@nonos.systems>
+ * https://nonos.systems
+ *
+ * Design System: Dark theme with official NONOS teal branding
+ * Brand Colors: Primary #66FFFF, Secondary #2E5C5C
+ * Typography: Poppins (Light, Regular, Medium, Semi-Bold)
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+	/* NONOS Official Brand Colors - From brand-guidelines */
+	--nonos-primary: #66FFFF;      /* Vibrant teal - innovation and forward thinking */
+	--nonos-secondary: #2E5C5C;    /* Darker teal - depth, trust, and stability */
+
+	/* Background Colors - Dark Theme */
+	--nox-bg-primary: #0d0d1a;
+	--nox-bg-secondary: #12121f;
+	--nox-bg-tertiary: #1a1a2e;
+	--nox-bg-elevated: #1e1e32;
+	--nox-bg-hover: #252540;
+	--nox-bg-active: #2a2a4a;
+
+	/* Text Colors */
+	--nox-text-primary: #ffffff;
+	--nox-text-secondary: #a0a0b8;
+	--nox-text-muted: #6b6b80;
+	--nox-text-disabled: #454560;
+
+	/* Accent Colors - NONOS Teal Brand */
+	--nox-accent-primary: #66FFFF;
+	--nox-accent-secondary: #2E5C5C;
+	--nox-accent-tertiary: #1f4444;
+	--nox-accent-glow: rgba(102, 255, 255, 0.15);
+	--nox-accent-gradient: linear-gradient(135deg, #66FFFF 0%, #2E5C5C 100%);
+	--nox-accent-gradient-hover: linear-gradient(135deg, #88FFFF 0%, #3d7575 100%);
+
+	/* Status Colors */
+	--nox-success: #00ff88;
+	--nox-success-bg: rgba(0, 255, 136, 0.1);
+	--nox-warning: #ffaa00;
+	--nox-warning-bg: rgba(255, 170, 0, 0.1);
+	--nox-error: #ff4466;
+	--nox-error-bg: rgba(255, 68, 102, 0.1);
+	--nox-info: #66FFFF;
+	--nox-info-bg: rgba(102, 255, 255, 0.1);
+
+	/* Borders */
+	--nox-border: #2a2a40;
+	--nox-border-light: #353550;
+	--nox-border-focus: #66FFFF;
+	--nox-border-subtle: #1f1f35;
+
+	/* Spacing Scale */
+	--nox-space-2xs: 2px;
+	--nox-space-xs: 4px;
+	--nox-space-sm: 8px;
+	--nox-space-md: 16px;
+	--nox-space-lg: 24px;
+	--nox-space-xl: 32px;
+	--nox-space-2xl: 48px;
+	--nox-space-3xl: 64px;
+
+	/* Typography - Poppins */
+	--nox-font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--nox-font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+
+	/* Font Weights */
+	--nox-font-light: 300;
+	--nox-font-regular: 400;
+	--nox-font-medium: 500;
+	--nox-font-semibold: 600;
+
+	/* Font Sizes */
+	--nox-text-xs: 11px;
+	--nox-text-sm: 13px;
+	--nox-text-base: 14px;
+	--nox-text-lg: 16px;
+	--nox-text-xl: 18px;
+	--nox-text-2xl: 24px;
+	--nox-text-3xl: 32px;
+
+	/* Border Radius */
+	--nox-radius-xs: 2px;
+	--nox-radius-sm: 4px;
+	--nox-radius-md: 6px;
+	--nox-radius-lg: 8px;
+	--nox-radius-xl: 12px;
+	--nox-radius-2xl: 16px;
+	--nox-radius-full: 9999px;
+
+	/* Shadows */
+	--nox-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--nox-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+	--nox-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+	--nox-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+	--nox-shadow-glow: 0 0 20px rgba(102, 255, 255, 0.2);
+	--nox-shadow-glow-strong: 0 0 40px rgba(102, 255, 255, 0.3);
+
+	/* Transitions */
+	--nox-transition-fast: 100ms ease;
+	--nox-transition-normal: 200ms ease;
+	--nox-transition-slow: 300ms ease;
+	--nox-transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	/* Z-Index Scale */
+	--nox-z-dropdown: 100;
+	--nox-z-sticky: 200;
+	--nox-z-modal: 300;
+	--nox-z-tooltip: 400;
+	--nox-z-toast: 500;
+}
+
+/* Reset & Base */
+*, *::before, *::after {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	font-size: 16px;
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	min-height: 100vh;
+	font-family: var(--nox-font-sans);
+	font-size: var(--nox-text-base);
+	font-weight: var(--nox-font-regular);
+	line-height: 1.6;
+	color: var(--nox-text-primary);
+	background: var(--nox-bg-primary);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+#app {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Scrollbar - Minimal Dark */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--nox-border);
+	border-radius: var(--nox-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--nox-border-light);
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* Selection */
+::selection {
+	background: var(--nox-accent-primary);
+	color: var(--nox-bg-primary);
+}
+
+/* Focus States */
+:focus {
+	outline: none;
+}
+
+:focus-visible {
+	outline: 2px solid var(--nox-accent-primary);
+	outline-offset: 2px;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+	font-weight: var(--nox-font-semibold);
+	line-height: 1.3;
+	letter-spacing: -0.02em;
+}
+
+h1 { font-size: var(--nox-text-3xl); }
+h2 { font-size: var(--nox-text-2xl); }
+h3 { font-size: var(--nox-text-xl); }
+h4 { font-size: var(--nox-text-lg); }
+
+p {
+	color: var(--nox-text-secondary);
+}
+
+small {
+	font-size: var(--nox-text-sm);
+	color: var(--nox-text-muted);
+}
+
+strong {
+	font-weight: var(--nox-font-semibold);
+	color: var(--nox-text-primary);
+}
+
+/* Links */
+a {
+	color: var(--nox-accent-primary);
+	text-decoration: none;
+	transition: color var(--nox-transition-fast);
+}
+
+a:hover {
+	color: var(--nox-accent-secondary);
+}
+
+/* Buttons - Base */
+button {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: var(--nox-font-medium);
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+	transition: all var(--nox-transition-fast);
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+/* Input Fields */
+input, textarea, select {
+	font-family: inherit;
+	font-size: var(--nox-text-base);
+	font-weight: var(--nox-font-regular);
+	color: var(--nox-text-primary);
+	background: var(--nox-bg-tertiary);
+	border: 1px solid var(--nox-border);
+	border-radius: var(--nox-radius-md);
+	padding: var(--nox-space-sm) var(--nox-space-md);
+	transition: all var(--nox-transition-fast);
+}
+
+input:hover, textarea:hover, select:hover {
+	border-color: var(--nox-border-light);
+}
+
+input:focus, textarea:focus, select:focus {
+	border-color: var(--nox-accent-primary);
+	box-shadow: 0 0 0 3px var(--nox-accent-glow);
+}
+
+input::placeholder, textarea::placeholder {
+	color: var(--nox-text-muted);
+}
+
+/* Select */
+select {
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 12px center;
+	padding-right: 36px;
+}
+
+/* Code & Monospace */
+code, pre, kbd {
+	font-family: var(--nox-font-mono);
+}
+
+code {
+	font-size: var(--nox-text-sm);
+	background: var(--nox-bg-tertiary);
+	padding: var(--nox-space-2xs) var(--nox-space-xs);
+	border-radius: var(--nox-radius-sm);
+	color: var(--nox-accent-primary);
+}
+
+pre {
+	background: var(--nox-bg-secondary);
+	padding: var(--nox-space-md);
+	border-radius: var(--nox-radius-lg);
+	border: 1px solid var(--nox-border);
+	overflow-x: auto;
+}
+
+pre code {
+	background: none;
+	padding: 0;
+	color: inherit;
+}
+
+/* Lists */
+ul, ol {
+	list-style: none;
+}
+
+/* Tables */
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+th, td {
+	padding: var(--nox-space-sm) var(--nox-space-md);
+	text-align: left;
+	border-bottom: 1px solid var(--nox-border);
+}
+
+th {
+	font-weight: var(--nox-font-medium);
+	color: var(--nox-text-muted);
+	font-size: var(--nox-text-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+/* Utility Classes */
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	border: 0;
+}
+
+/* Animation Keyframes */
+@keyframes fadeIn {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+@keyframes slideUp {
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+@keyframes glow {
+	0%, 100% { box-shadow: 0 0 5px var(--nox-accent-primary); }
+	50% { box-shadow: 0 0 20px var(--nox-accent-primary); }
+}
+
+/* Scrollable Containers */
+.scrollable {
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+}
+
+/* Glass Effect */
+.glass {
+	background: rgba(18, 18, 31, 0.8);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+}
