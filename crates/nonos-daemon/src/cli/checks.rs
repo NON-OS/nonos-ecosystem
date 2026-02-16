@@ -64,9 +64,9 @@ pub async fn run_checks(
         Err(_) => { println!("\x1b[38;5;226mWARN\x1b[0m - In use (daemon may be running)"); warnings += 1; }
     }
 
-    print!("[6/7] P2P Port (9000):     ");
+    print!("[6/7] P2P Port (9432):     ");
     std::io::stdout().flush().unwrap();
-    match std::net::TcpListener::bind("0.0.0.0:9000") {
+    match std::net::TcpListener::bind("0.0.0.0:9432") {
         Ok(_) => { println!("\x1b[38;5;46mOK\x1b[0m (available)"); passed += 1; }
         Err(_) => { println!("\x1b[38;5;226mWARN\x1b[0m - In use"); warnings += 1; }
     }
