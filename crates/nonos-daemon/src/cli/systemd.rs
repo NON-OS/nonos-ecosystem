@@ -106,3 +106,36 @@ pub async fn reload_node(data_dir: &PathBuf) -> NonosResult<()> {
     }
     Ok(())
 }
+
+pub async fn restart_node(
+    _config_path: &PathBuf,
+    data_dir: &PathBuf,
+    force: bool,
+) -> NonosResult<()> {
+    let pid_file = data_dir.join("nonos.pid");
+
+    if pid_file.exists() {
+        println!("\x1b[38;5;226m[*]\x1b[0m Stopping running daemon...");
+        stop_node(data_dir, force).await?;
+
+        for i in 0..30 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if !pid_file.exists() {
+                break;
+            }
+            if i == 29 {
+                println!("\x1b[38;5;196m[-]\x1b[0m Timeout waiting for daemon to stop");
+                return Err(nonos_types::NonosError::Internal(
+                    "Daemon did not stop in time".into()
+                ));
+            }
+        }
+    }
+
+    println!("\x1b[38;5;46m[+]\x1b[0m Starting daemon...");
+    println!("Run: nonos run -d {}", data_dir.display());
+    println!("\nTo restart in the same process, use systemd:");
+    println!("  sudo systemctl restart nonos");
+
+    Ok(())
+}
