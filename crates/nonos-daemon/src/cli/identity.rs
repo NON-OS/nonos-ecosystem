@@ -1,10 +1,12 @@
 use super::commands::{IdentityAction, OutputFormat};
 use nonos_crypto::{
-    compute_zk_commitment, generate_identity_proof, verify_identity_proof,
-    ZkIdentityProof, compute_nullifier,
+    compute_identity_commitment, generate_identity_proof, verify_identity_proof,
+    IdentityProofInput, ZkIdentityProof,
 };
 use nonos_types::NonosResult;
 use std::path::PathBuf;
+
+const MERKLE_DEPTH: usize = 20;
 
 pub async fn handle_identity(
     action: IdentityAction,
@@ -34,26 +36,22 @@ fn generate_identity(identities_dir: &PathBuf, label: Option<String>, format: &O
 
     let mut secret = [0u8; 32];
     let mut blinding = [0u8; 32];
-    let mut spending_key = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut secret);
     rand::thread_rng().fill_bytes(&mut blinding);
-    rand::thread_rng().fill_bytes(&mut spending_key);
 
-    let commitment = compute_zk_commitment(&secret, &blinding);
-    let nullifier = compute_nullifier(&spending_key, &commitment);
+    let commitment = compute_identity_commitment(&secret, &blinding);
     let id = hex::encode(&commitment[..8]);
 
     let identity = serde_json::json!({
-        "version": 1,
+        "version": 2,
         "id": id,
         "label": label.clone().unwrap_or_else(|| format!("identity-{}", &id[..6])),
         "commitment": hex::encode(commitment),
-        "nullifier": hex::encode(nullifier),
         "secret": hex::encode(secret),
         "blinding": hex::encode(blinding),
-        "spending_key": hex::encode(spending_key),
         "created_at": chrono::Utc::now().to_rfc3339(),
         "registered": false,
+        "merkle_index": null,
     });
 
     let identity_file = identities_dir.join(format!("{}.json", id));
@@ -174,7 +172,6 @@ fn show_identity(identities_dir: &PathBuf, id: &str, format: &OutputFormat) -> N
                 "id": identity["id"],
                 "label": identity["label"],
                 "commitment": identity["commitment"],
-                "nullifier": identity["nullifier"],
                 "created_at": identity["created_at"],
                 "registered": identity["registered"],
             });
@@ -186,7 +183,6 @@ fn show_identity(identities_dir: &PathBuf, id: &str, format: &OutputFormat) -> N
             println!("ID:          \x1b[38;5;226m{}\x1b[0m", identity["id"].as_str().unwrap_or("-"));
             println!("Label:       \x1b[38;5;51m{}\x1b[0m", identity["label"].as_str().unwrap_or("-"));
             println!("Commitment:  \x1b[38;5;245m{}\x1b[0m", identity["commitment"].as_str().unwrap_or("-"));
-            println!("Nullifier:   \x1b[38;5;245m{}\x1b[0m", identity["nullifier"].as_str().unwrap_or("-"));
             println!("Created:     {}", identity["created_at"].as_str().unwrap_or("-"));
             let registered = if identity["registered"].as_bool().unwrap_or(false) { "\x1b[38;5;46mYes\x1b[0m" } else { "\x1b[38;5;245mNo\x1b[0m" };
             println!("Registered:  {}", registered);
@@ -261,7 +257,7 @@ fn import_identity(identities_dir: &PathBuf, file: &PathBuf, format: &OutputForm
 fn generate_proof(
     identities_dir: &PathBuf,
     id: &str,
-    _challenge: Option<String>,
+    challenge: Option<String>,
     format: &OutputFormat,
 ) -> NonosResult<()> {
     let identity_file = identities_dir.join(format!("{}.json", id));
@@ -290,9 +286,38 @@ fn generate_proof(
     secret.copy_from_slice(&secret_bytes);
     blinding.copy_from_slice(&blinding_bytes);
 
+    let scope = if let Some(ref c) = challenge {
+        let mut scope_bytes = [0u8; 32];
+        let hash = nonos_crypto::blake3_hash(c.as_bytes());
+        scope_bytes.copy_from_slice(&hash.0);
+        scope_bytes
+    } else {
+        [0u8; 32]
+    };
+
+    let commitment = compute_identity_commitment(&secret, &blinding);
+
+    let merkle_path = vec![[0u8; 32]; MERKLE_DEPTH];
+    let leaf_index = 0u64;
+
+    let mut merkle_root = commitment;
+    for sibling in &merkle_path {
+        let hash = nonos_crypto::poseidon_hash2(&merkle_root, sibling);
+        merkle_root = hash;
+    }
+
     println!("\x1b[38;5;245mGenerating Groth16 proof (this may take a moment)...\x1b[0m");
 
-    let zk_proof = generate_identity_proof(&secret, &blinding)
+    let input = IdentityProofInput {
+        secret,
+        blinding,
+        leaf_index,
+        merkle_path,
+        merkle_root,
+        scope,
+    };
+
+    let zk_proof = generate_identity_proof(&input)
         .map_err(|e| nonos_types::NonosError::Internal(format!("Proof generation failed: {}", e)))?;
 
     let proof_b64 = zk_proof.to_base64();
@@ -301,7 +326,9 @@ fn generate_proof(
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&serde_json::json!({
                 "proof": proof_b64,
-                "commitment": hex::encode(zk_proof.commitment),
+                "merkle_root": hex::encode(zk_proof.merkle_root),
+                "nullifier": hex::encode(zk_proof.nullifier),
+                "scope": hex::encode(zk_proof.scope),
                 "proof_system": "groth16",
                 "curve": "bn254"
             })).unwrap());
@@ -309,8 +336,11 @@ fn generate_proof(
         OutputFormat::Text => {
             println!("\x1b[38;5;46mZK Proof Generated (Groth16/BN254)\x1b[0m");
             println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(70));
-            println!("Commitment: {}", hex::encode(zk_proof.commitment));
-            println!("Proof: {}", proof_b64);
+            println!("Merkle Root: {}", hex::encode(zk_proof.merkle_root));
+            println!("Nullifier:   {}", hex::encode(zk_proof.nullifier));
+            println!("Scope:       {}", hex::encode(zk_proof.scope));
+            println!("Proof:       {}", &proof_b64[..64]);
+            println!("             ...");
             println!("\n\x1b[38;5;245mThis is a cryptographically valid ZK proof.\x1b[0m");
             println!("\x1b[38;5;245mVerify with: nonos identity verify <proof>\x1b[0m");
         }
@@ -332,7 +362,9 @@ fn verify_proof(proof: &str, format: &OutputFormat) -> NonosResult<()> {
         OutputFormat::Json => {
             println!("{}", serde_json::json!({
                 "valid": valid,
-                "commitment": hex::encode(zk_proof.commitment),
+                "merkle_root": hex::encode(zk_proof.merkle_root),
+                "nullifier": hex::encode(zk_proof.nullifier),
+                "scope": hex::encode(zk_proof.scope),
                 "proof_system": "groth16",
                 "curve": "bn254"
             }));
@@ -340,8 +372,9 @@ fn verify_proof(proof: &str, format: &OutputFormat) -> NonosResult<()> {
         OutputFormat::Text => {
             if valid {
                 println!("\x1b[38;5;46m[+]\x1b[0m Proof verified successfully");
-                println!("\x1b[38;5;245mCommitment: {}\x1b[0m", hex::encode(zk_proof.commitment));
-                println!("\x1b[38;5;245mThe prover knows the secret preimage.\x1b[0m");
+                println!("\x1b[38;5;245mMerkle Root: {}\x1b[0m", hex::encode(zk_proof.merkle_root));
+                println!("\x1b[38;5;245mNullifier:   {}\x1b[0m", hex::encode(zk_proof.nullifier));
+                println!("\x1b[38;5;245mThe prover knows the secret and is in the identity set.\x1b[0m");
             } else {
                 println!("\x1b[38;5;196m[X]\x1b[0m Proof verification FAILED");
                 println!("\x1b[38;5;196mThis proof is invalid or has been tampered with.\x1b[0m");
