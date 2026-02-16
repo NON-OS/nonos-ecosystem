@@ -105,6 +105,10 @@ pub enum Commands {
         #[arg(short, long)]
         force: bool,
     },
+    Restart {
+        #[arg(short, long)]
+        force: bool,
+    },
     Reload,
     Version,
 }
