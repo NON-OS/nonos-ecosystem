@@ -133,11 +133,11 @@
 			</div>
 			<div class="about-row">
 				<span class="label">License</span>
-				<span class="value">MIT</span>
+				<span class="value">AGPL-3.0</span>
 			</div>
 		</div>
 		<p class="copyright">
-			Copyright &copy; 2024 NON-OS &lt;team@nonos.systems&gt;
+			Copyright &copy; 2026 NON-OS &lt;team@nonos.systems&gt;
 		</p>
 	</section>
 </div>
