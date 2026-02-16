@@ -132,17 +132,16 @@ impl EncryptedData {
     }
 }
 
-pub fn derive_key_from_password(password: &[u8], salt: &[u8], iterations: u32) -> Blake3Key {
-    let mut key = crate::blake3_hash(password);
+pub fn derive_key_from_password(password: &[u8], salt: &[u8]) -> Blake3Key {
+    use argon2::{Algorithm, Argon2, Params, Version};
 
-    for _ in 0..iterations {
-        let mut input = Vec::with_capacity(64);
-        input.extend_from_slice(&key.0);
-        input.extend_from_slice(salt);
-        key = crate::blake3_hash(&input);
-    }
+    let params = Params::new(64 * 1024, 3, 4, Some(32)).expect("Invalid Argon2 params");
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
-    Blake3Key::from_bytes(key.0)
+    let mut key = [0u8; 32];
+    argon2.hash_password_into(password, salt, &mut key).expect("Argon2 hashing failed");
+
+    Blake3Key::from_bytes(key)
 }
 
 #[cfg(test)]
@@ -218,17 +217,17 @@ mod tests {
     #[test]
     fn test_password_key_derivation() {
         let password = b"user password";
-        let salt = b"random salt";
+        let salt = b"random salt value";
 
-        let key1 = derive_key_from_password(password, salt, 100);
-        let key2 = derive_key_from_password(password, salt, 100);
+        let key1 = derive_key_from_password(password, salt);
+        let key2 = derive_key_from_password(password, salt);
 
         assert_eq!(key1.0, key2.0);
 
-        let key3 = derive_key_from_password(b"different", salt, 100);
+        let key3 = derive_key_from_password(b"different", salt);
         assert_ne!(key1.0, key3.0);
 
-        let key4 = derive_key_from_password(password, salt, 200);
+        let key4 = derive_key_from_password(password, b"different salt!");
         assert_ne!(key1.0, key4.0);
     }
 }
