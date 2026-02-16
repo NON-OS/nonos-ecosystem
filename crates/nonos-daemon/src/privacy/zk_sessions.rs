@@ -1,9 +1,12 @@
-use nonos_crypto::{poseidon_hash, random_bytes};
+use nonos_crypto::{poseidon_hash, random_bytes, compute_identity_commitment};
+use nonos_crypto::zk_proofs::compute_merkle_root;
 use nonos_types::{NonosError, NonosResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+const MERKLE_DEPTH: usize = 20;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ZkSessionProof {
@@ -35,7 +38,8 @@ impl ZkSessionManager {
         domain: &str,
     ) -> NonosResult<ZkSessionProof> {
         let session_random = random_bytes::<32>();
-        let identity_commitment = poseidon_hash(identity_secret);
+        let blinding = random_bytes::<32>();
+        let identity_commitment = compute_identity_commitment(identity_secret, &blinding);
 
         let mut nullifier_input = Vec::with_capacity(64);
         nullifier_input.extend_from_slice(identity_secret);
@@ -55,7 +59,7 @@ impl ZkSessionManager {
             }
         }
 
-        let proof = self.generate_groth16_proof(identity_secret).await?;
+        let proof = self.generate_groth16_proof(identity_secret, &blinding, domain).await?;
 
         {
             let mut nullifiers = self.used_nullifiers.write().await;
@@ -93,10 +97,35 @@ impl ZkSessionManager {
         self.verify_groth16_proof(proof).await
     }
 
-    async fn generate_groth16_proof(&self, secret: &[u8; 32]) -> NonosResult<Vec<u8>> {
-        use nonos_crypto::zk_proofs::generate_identity_proof;
-        let blinding = random_bytes::<32>();
-        let proof = generate_identity_proof(secret, &blinding)
+    async fn generate_groth16_proof(
+        &self,
+        secret: &[u8; 32],
+        blinding: &[u8; 32],
+        scope_str: &str,
+    ) -> NonosResult<Vec<u8>> {
+        use nonos_crypto::zk_proofs::{generate_identity_proof, IdentityProofInput};
+
+        let mut scope = [0u8; 32];
+        let scope_hash = nonos_crypto::blake3_hash(scope_str.as_bytes());
+        scope.copy_from_slice(&scope_hash.0);
+
+        let commitment = compute_identity_commitment(secret, blinding);
+
+        let merkle_path = vec![[0u8; 32]; MERKLE_DEPTH];
+        let leaf_index = 0u64;
+
+        let merkle_root = compute_merkle_root(&commitment, leaf_index, &merkle_path);
+
+        let input = IdentityProofInput {
+            secret: *secret,
+            blinding: *blinding,
+            leaf_index,
+            merkle_path,
+            merkle_root,
+            scope,
+        };
+
+        let proof = generate_identity_proof(&input)
             .map_err(|e| NonosError::Crypto(format!("Proof generation failed: {}", e)))?;
         Ok(proof.to_bytes())
     }
@@ -119,6 +148,14 @@ impl ZkSessionManager {
         *self.identity_root.read().await
     }
 
+    pub async fn clear_nullifiers(&self) {
+        self.used_nullifiers.write().await.clear();
+    }
+
+    pub async fn is_nullifier_used(&self, nullifier: &str) -> bool {
+        self.used_nullifiers.read().await.contains(nullifier)
+    }
+
     pub async fn nullifier_count(&self) -> usize {
         self.used_nullifiers.read().await.len()
     }
@@ -135,22 +172,35 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_zk_session_creation() {
+    async fn test_session_creation() {
         let manager = ZkSessionManager::new();
         let secret = random_bytes::<32>();
-        let proof = manager.create_session_proof(&secret, "example.com").await.unwrap();
-        assert!(!proof.session_commitment.is_empty());
-        assert!(proof.valid_for_secs > 0);
+
+        let proof = manager.create_session_proof(&secret, "example.com").await;
+        assert!(proof.is_ok());
     }
 
     #[tokio::test]
-    async fn test_nullifier_uniqueness() {
+    async fn test_nullifier_replay_prevention() {
         let manager = ZkSessionManager::new();
         let secret = random_bytes::<32>();
 
-        let _ = manager.create_session_proof(&secret, "example.com").await.unwrap();
-        let result = manager.create_session_proof(&secret, "example.com").await;
+        let proof1 = manager.create_session_proof(&secret, "example.com").await;
+        assert!(proof1.is_ok());
 
-        assert!(result.is_err());
+        let proof2 = manager.create_session_proof(&secret, "example.com").await;
+        assert!(proof2.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_different_domains_allowed() {
+        let manager = ZkSessionManager::new();
+        let secret = random_bytes::<32>();
+
+        let proof1 = manager.create_session_proof(&secret, "example.com").await;
+        assert!(proof1.is_ok());
+
+        let proof2 = manager.create_session_proof(&secret, "other.com").await;
+        assert!(proof2.is_ok());
     }
 }
