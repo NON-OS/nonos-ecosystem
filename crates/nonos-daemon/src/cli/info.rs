@@ -197,7 +197,7 @@ pub fn show_version() {
     println!("\x1b[38;5;245m{}\x1b[0m", "═".repeat(50));
     println!("  P2P:       \x1b[38;5;51mlibp2p\x1b[0m (Kademlia DHT + GossipSub)");
     println!("  Privacy:   \x1b[38;5;51mAnyone Network\x1b[0m (SOCKS5)");
-    println!("  ZK:        \x1b[38;5;51mPoseidon\x1b[0m (Identity commitments)");
+    println!("  ZK:        \x1b[38;5;51mGroth16 + Poseidon\x1b[0m (BN254 curve)");
     println!("  Storage:   \x1b[38;5;51msled\x1b[0m (Embedded database)");
     println!("  Crypto:    \x1b[38;5;51med25519, secp256k1, blake3\x1b[0m");
     println!();
