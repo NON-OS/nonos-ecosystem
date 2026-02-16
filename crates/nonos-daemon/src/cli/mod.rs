@@ -24,6 +24,6 @@ pub use info::{show_info, show_status, show_version};
 pub use checks::run_checks;
 pub use peers::{handle_peers, show_stats};
 pub use config_cmd::handle_config;
-pub use systemd::{generate_systemd, stop_node, reload_node};
+pub use systemd::{generate_systemd, stop_node, restart_node, reload_node};
 pub use dashboard::launch_dashboard;
 pub use utils::init_logging;
