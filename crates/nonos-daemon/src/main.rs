@@ -5,8 +5,8 @@ use cli::{
     Cli, Commands, init_logging, run_node, init_node,
     handle_identity, handle_mixer, handle_stake, handle_rewards,
     show_info, show_status, handle_config, run_checks, show_stats,
-    handle_peers, generate_systemd, stop_node, reload_node, show_version,
-    launch_dashboard,
+    handle_peers, generate_systemd, stop_node, restart_node, reload_node,
+    show_version, launch_dashboard,
 };
 use nonos_types::NonosResult;
 use std::path::PathBuf;
@@ -70,6 +70,9 @@ async fn main() -> NonosResult<()> {
         }
         Commands::Stop { force } => {
             stop_node(&data_dir, force).await?;
+        }
+        Commands::Restart { force } => {
+            restart_node(&config_path, &data_dir, force).await?;
         }
         Commands::Reload => {
             reload_node(&data_dir).await?;
