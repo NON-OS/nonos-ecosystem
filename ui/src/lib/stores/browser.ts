@@ -36,6 +36,8 @@ function createBrowserStore() {
 		setLoading: (loading: boolean) => update(s => ({ ...s, isLoading: loading })),
 		setError: (error: string) => update(s => ({ ...s, errorMessage: error, isLoading: false })),
 		clearPage: () => update(s => ({ ...s, pageContent: '', currentUrl: '', pageTitle: 'New Tab', errorMessage: '' })),
+		setCurrentUrl: (url: string) => update(s => ({ ...s, currentUrl: url, isLoading: true })),
+		clearUrl: () => update(s => ({ ...s, currentUrl: '', pageContent: '', pageTitle: 'New Tab' })),
 
 		setPageContent: (data: {
 			url: string;
