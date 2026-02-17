@@ -9,7 +9,7 @@
   },
   "package": {
     "productName": "NONOS Ecosystem",
-    "version": "1.0.1"
+    "version": "1.0.2"
   },
   "tauri": {
     "allowlist": {
@@ -55,7 +55,7 @@
       }
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: http://localhost:9060 https:; connect-src 'self' http://localhost:9060 ws://localhost:5173 https:; frame-src 'self' http://localhost:9060; child-src 'self' http://localhost:9060"
+      "csp": null
     },
     "updater": {
       "active": false
