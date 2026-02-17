@@ -1,7 +1,8 @@
 use crate::{
     NodeConfig, NodeStorage, P2pNetwork, RewardTracker, NodeMetricsCollector,
-    ServiceManager, ServiceConfig, PrivacyServiceManager, StorageConfig,
+    ServiceManager, ServiceConfig, PrivacyServiceManager, StorageConfig, ProxiedHttpClient,
 };
+use nonos_anyone::{AnyoneClient, AnyoneClientBuilder, SecurityPreset};
 use nonos_crypto::NodeIdentity;
 use nonos_types::{
     NodeId, NodeMetrics, NodeStatus, NodeTier, NonosError, NonosResult,
@@ -25,6 +26,8 @@ pub struct Node {
     storage: Option<Arc<NodeStorage>>,
     services: Option<Arc<RwLock<ServiceManager>>>,
     privacy: Option<Arc<PrivacyServiceManager>>,
+    anyone: Option<Arc<AnyoneClient>>,
+    http_client: Arc<ProxiedHttpClient>,
     start_time: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -42,6 +45,8 @@ impl Node {
             storage: None,
             services: None,
             privacy: None,
+            anyone: None,
+            http_client: Arc::new(ProxiedHttpClient::new()),
             start_time: None,
         })
     }
@@ -57,6 +62,8 @@ impl Node {
             storage: None,
             services: None,
             privacy: None,
+            anyone: None,
+            http_client: Arc::new(ProxiedHttpClient::new()),
             start_time: None,
         }
     }
@@ -121,6 +128,10 @@ impl Node {
         privacy.start_all().await?;
         self.privacy = Some(Arc::new(privacy));
 
+        if self.config.anyone.enabled {
+            self.start_anyone_network().await?;
+        }
+
         self.start_services(network_arc).await?;
 
         self.start_time = Some(chrono::Utc::now());
@@ -161,6 +172,43 @@ impl Node {
         Ok(())
     }
 
+    async fn start_anyone_network(&mut self) -> NonosResult<()> {
+        info!("Starting Anyone Network client for anonymous traffic routing");
+
+        let security = match self.config.anyone.security_level {
+            crate::config::SecurityLevel::Standard => SecurityPreset::Standard,
+            crate::config::SecurityLevel::Enhanced => SecurityPreset::Enhanced,
+            crate::config::SecurityLevel::Maximum => SecurityPreset::Maximum,
+        };
+
+        let anyone_config = self.config.anyone.to_anyone_config(&self.config.data_dir);
+
+        let client = AnyoneClientBuilder::new()
+            .data_dir(anyone_config.data_dir)
+            .socks_port(self.config.anyone.socks_port)
+            .security(security)
+            .build()
+            .map_err(|e| NonosError::Network(format!("Failed to build Anyone client: {}", e)))?;
+
+        if self.config.anyone.auto_start {
+            client.start().await.map_err(|e| {
+                NonosError::Network(format!("Failed to start Anyone Network: {}", e))
+            })?;
+
+            self.http_client
+                .configure_proxy(self.config.anyone.socks_port)
+                .await?;
+
+            info!(
+                "Anyone Network connected - all outbound traffic routed through SOCKS5 port {}",
+                self.config.anyone.socks_port
+            );
+        }
+
+        self.anyone = Some(Arc::new(client));
+        Ok(())
+    }
+
     pub async fn stop(&mut self) -> NonosResult<()> {
         let current_status = *self.status.read().await;
         if current_status == NodeStatus::Stopped {
@@ -179,6 +227,12 @@ impl Node {
             privacy.stop_all();
         }
         self.privacy = None;
+
+        if let Some(ref anyone) = self.anyone {
+            let _ = anyone.stop().await;
+        }
+        self.anyone = None;
+        self.http_client.disable_proxy().await;
 
         if let Some(ref network) = self.network {
             network.write().await.shutdown().await;
@@ -248,6 +302,22 @@ impl Node {
 
     pub fn services(&self) -> Option<Arc<RwLock<ServiceManager>>> {
         self.services.clone()
+    }
+
+    pub fn anyone(&self) -> Option<Arc<AnyoneClient>> {
+        self.anyone.clone()
+    }
+
+    pub fn http_client(&self) -> Arc<ProxiedHttpClient> {
+        self.http_client.clone()
+    }
+
+    pub async fn is_anyone_connected(&self) -> bool {
+        if let Some(ref anyone) = self.anyone {
+            anyone.is_connected().await
+        } else {
+            false
+        }
     }
 
     pub async fn diagnose(&self) -> DiagnosticReport {
