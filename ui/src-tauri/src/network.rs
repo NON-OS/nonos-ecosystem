@@ -46,8 +46,9 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
     let download_url = match (os, arch) {
         ("macos", "aarch64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-macos-arm64.zip",
         ("macos", "x86_64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-macos-amd64.zip",
-        ("linux", "x86_64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-linux-amd64.tar.gz",
-        ("linux", "aarch64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-linux-arm64.tar.gz",
+        ("linux", "x86_64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-linux-amd64.zip",
+        ("linux", "aarch64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-linux-arm64.zip",
+        ("windows", "x86_64") => "https://github.com/anyone-protocol/ator-protocol/releases/download/v0.4.9.11/anon-live-windows-signed-amd64.zip",
         _ => return Err(format!("Unsupported platform: {}-{}", os, arch)),
     };
 
@@ -55,8 +56,9 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
         .await
         .map_err(|e| format!("Failed to create directory: {}", e))?;
 
-    let target_path = target_dir.join("anon");
-    let archive_path = target_dir.join(if os == "macos" { "anon.zip" } else { "anon.tar.gz" });
+    let binary_name = if os == "windows" { "anon.exe" } else { "anon" };
+    let target_path = target_dir.join(binary_name);
+    let archive_path = target_dir.join("anon.zip");
 
     let response = reqwest::get(download_url)
         .await
@@ -74,7 +76,38 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
         .await
         .map_err(|e| format!("Failed to write archive: {}", e))?;
 
-    if os == "macos" {
+    if os == "windows" {
+        let output = Command::new("powershell")
+            .arg("-Command")
+            .arg(format!(
+                "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                archive_path.display(),
+                target_dir.display()
+            ))
+            .output()
+            .await
+            .map_err(|e| format!("Failed to extract: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("Extraction failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let possible_paths = vec![
+            target_dir.join("anon.exe"),
+            target_dir.join("anon-live-windows-signed-amd64").join("anon.exe"),
+        ];
+
+        for path in possible_paths {
+            if path.exists() {
+                if path != target_path {
+                    tokio::fs::rename(&path, &target_path)
+                        .await
+                        .map_err(|e| format!("Failed to move binary: {}", e))?;
+                }
+                break;
+            }
+        }
+    } else {
         let output = Command::new("unzip")
             .arg("-o")
             .arg(&archive_path)
@@ -92,6 +125,8 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
             target_dir.join("anon"),
             target_dir.join("anon-live-macos-arm64").join("anon"),
             target_dir.join("anon-live-macos-amd64").join("anon"),
+            target_dir.join("anon-live-linux-amd64").join("anon"),
+            target_dir.join("anon-live-linux-arm64").join("anon"),
         ];
 
         for path in possible_paths {
@@ -103,19 +138,6 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
                 }
                 break;
             }
-        }
-    } else {
-        let output = Command::new("tar")
-            .arg("-xzf")
-            .arg(&archive_path)
-            .arg("-C")
-            .arg(target_dir)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to extract: {}", e))?;
-
-        if !output.status.success() {
-            return Err(format!("Extraction failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
     }
 
@@ -140,25 +162,41 @@ async fn download_anon_binary(target_dir: &PathBuf) -> Result<PathBuf, String> {
 }
 
 pub async fn find_anon_binary() -> Result<PathBuf, String> {
-    let candidates = vec![
-        PathBuf::from("/usr/bin/anon"),
-        PathBuf::from("/usr/local/bin/anon"),
-        PathBuf::from("/opt/anon/bin/anon"),
-        PathBuf::from("/opt/homebrew/bin/anon"),
-        dirs::home_dir()
-            .map(|h| h.join(".local/bin/anon"))
-            .unwrap_or_default(),
-        PathBuf::from("./anon"),
+    let is_windows = std::env::consts::OS == "windows";
+    let binary_name = if is_windows { "anon.exe" } else { "anon" };
+
+    let mut candidates = vec![
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|p| p.join("anon")))
+            .and_then(|p| p.parent().map(|p| p.join(binary_name)))
             .unwrap_or_default(),
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("nonos")
             .join("bin")
-            .join("anon"),
+            .join(binary_name),
     ];
+
+    if is_windows {
+        candidates.extend(vec![
+            PathBuf::from(format!("C:\\Program Files\\anon\\{}", binary_name)),
+            PathBuf::from(format!(".\\{}", binary_name)),
+            dirs::home_dir()
+                .map(|h| h.join("AppData").join("Local").join("anon").join(binary_name))
+                .unwrap_or_default(),
+        ]);
+    } else {
+        candidates.extend(vec![
+            PathBuf::from("/usr/bin/anon"),
+            PathBuf::from("/usr/local/bin/anon"),
+            PathBuf::from("/opt/anon/bin/anon"),
+            PathBuf::from("/opt/homebrew/bin/anon"),
+            dirs::home_dir()
+                .map(|h| h.join(".local/bin/anon"))
+                .unwrap_or_default(),
+            PathBuf::from("./anon"),
+        ]);
+    }
 
     for path in &candidates {
         if path.exists() {
@@ -166,10 +204,11 @@ pub async fn find_anon_binary() -> Result<PathBuf, String> {
         }
     }
 
-    if let Ok(output) = Command::new("which").arg("anon").output().await {
+    let which_cmd = if is_windows { "where" } else { "which" };
+    if let Ok(output) = Command::new(which_cmd).arg(binary_name).output().await {
         if output.status.success() {
             let path_str = String::from_utf8_lossy(&output.stdout);
-            let path = PathBuf::from(path_str.trim());
+            let path = PathBuf::from(path_str.lines().next().unwrap_or("").trim());
             if path.exists() {
                 return Ok(path);
             }
