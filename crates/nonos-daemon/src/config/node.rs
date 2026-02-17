@@ -4,6 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use tracing::{info, warn};
 
+use super::anyone::AnyoneNetworkConfig;
 use super::api::ApiConfig;
 use super::constants::DEFAULT_P2P_PORT;
 use super::logging::LoggingConfig;
@@ -24,6 +25,7 @@ pub struct NodeConfig {
     pub bandwidth_limit: u64,
     pub services: ServicesConfig,
     pub network: NetworkConfig,
+    pub anyone: AnyoneNetworkConfig,
     pub rewards: RewardsConfig,
     pub security: SecurityConfig,
     pub logging: LoggingConfig,
@@ -45,6 +47,7 @@ impl Default for NodeConfig {
             bandwidth_limit: 0,
             services: ServicesConfig::default(),
             network: NetworkConfig::default(),
+            anyone: AnyoneNetworkConfig::default(),
             rewards: RewardsConfig::default(),
             security: SecurityConfig::default(),
             logging: LoggingConfig::default(),
