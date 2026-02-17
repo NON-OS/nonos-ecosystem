@@ -1,6 +1,6 @@
 [package]
 name = "nonos-app"
-version = "1.0.2"
+version = "1.0.25"
 description = "NONOS Ecosystem - Zero-trust privacy browser powered by Anyone Network"
 authors = ["NON-OS <team@nonos.systems>"]
 license = "AGPL-3.0"
