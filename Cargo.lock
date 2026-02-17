@@ -3478,22 +3478,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper-tls"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
-dependencies = [
- "bytes",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
- "native-tls",
- "tokio",
- "tokio-native-tls",
- "tower-service",
-]
-
-[[package]]
 name = "hyper-util"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5020,15 +5004,17 @@ dependencies = [
 
 [[package]]
 name = "nonos-app"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bip39",
  "dirs",
+ "flate2",
  "hex",
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
  "k256",
+ "native-tls",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "serde",
@@ -5037,6 +5023,7 @@ dependencies = [
  "tauri-build",
  "tiny-keccak",
  "tokio",
+ "tokio-native-tls",
  "tokio-socks",
  "url",
  "urlencoding",
@@ -6555,7 +6542,7 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.32",
  "hyper-rustls 0.24.2",
- "hyper-tls 0.5.0",
+ "hyper-tls",
  "ipnet",
  "js-sys",
  "log",
@@ -6574,6 +6561,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
+ "tokio-socks",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -6599,12 +6587,10 @@ dependencies = [
  "http-body-util",
  "hyper 1.8.1",
  "hyper-rustls 0.27.7",
- "hyper-tls 0.6.0",
  "hyper-util",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
@@ -6615,7 +6601,6 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper 1.0.2",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls 0.26.4",
  "tower 0.5.2",
  "tower-http 0.6.8",
