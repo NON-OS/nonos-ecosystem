@@ -16,29 +16,6 @@ NONOS is an ecosystem of tools that work together:
 - **Staking Contracts** - On-chain staking for node operators. Rewards based on uptime and stake.
 - **Dashboard** - Terminal UI for monitoring your node.
 
-## How It Works
-
-```
-You (Browser)
-    │
-    ▼
-Daemon (localhost:8420)
-    │
-    ├──► Wallet API ──► sign transactions
-    ├──► ZK Identity ──► prove membership without revealing identity
-    ├──► Cache Mixer ──► break timing correlations
-    │
-    ▼
-Anyone Network (SOCKS5 :9050)
-    │
-    ▼
-3+ onion relay hops
-    │
-    ▼
-Internet
-```
-
-The browser never touches the internet directly. Every request goes through the daemon, through the Anyone Network, through multiple relays. Your IP is hidden at every step.
 
 ## Project Structure
 
