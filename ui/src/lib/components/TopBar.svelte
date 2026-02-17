@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { invoke } from '@tauri-apps/api/tauri';
 	import { browserStore } from '$lib/stores/browser';
 
 	export let networkStatus: { connected: boolean; bootstrap_progress: number; circuits: number };
@@ -7,72 +6,60 @@
 
 	let url = '';
 
+	// Sync URL input with current URL from store
+	$: if ($browserStore.currentUrl && $browserStore.currentUrl !== url) {
+		url = $browserStore.currentUrl;
+	}
+
 	function formatAddress(addr: string): string {
 		if (!addr) return '';
 		return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 	}
 
-	/**
-	 * Navigate to a URL using native Tauri webview windows.
-	 * NONOS NODES POWER THE BROWSER - all traffic routed through Anyone Network!
-	 */
-	async function navigate() {
+	function navigate() {
 		if (!url) return;
 
-		// Determine final URL
 		let targetUrl: string;
 		if (url.startsWith('http://') || url.startsWith('https://')) {
 			targetUrl = url;
 		} else if (url.includes('.') && !url.includes(' ')) {
 			targetUrl = 'https://' + url;
 		} else {
-			// Search query
+			// NONOS Search via DuckDuckGo HTML (privacy-friendly)
 			targetUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(url)}`;
 		}
 
-		console.log('NONOS TopBar: Opening URL via NONOS Node Network:', targetUrl);
-
-		browserStore.setLoading(true);
-
-		try {
-			// Use Tauri's browser_navigate to open in a new native window
-			// Traffic is routed through NONOS Nodes via Anyone Network SOCKS5 proxy
-			const result = await invoke('browser_navigate', { url: targetUrl }) as string;
-			console.log('NONOS TopBar: Browser navigate result:', result);
-
-			// Parse tab ID from result
-			const tabMatch = result.match(/tab (\d+)/);
-			const tabId = tabMatch ? parseInt(tabMatch[1]) : Date.now();
-
-			// Update store
-			browserStore.setPageContent({
-				url: targetUrl,
-				content: 'native-window',
-				viaProxy: networkStatus.connected,
-				circuitId: 'nonos-node-' + tabId
-			});
-
-			browserStore.setLoading(false);
-		} catch (e) {
-			console.error('NONOS TopBar: Navigation failed:', e);
-			browserStore.setError(`Navigation failed: ${e}`);
-			browserStore.setLoading(false);
-		}
+		browserStore.setCurrentUrl(targetUrl);
 	}
 
 	function handleBack() {
-		// Back/forward with native windows - just show info
-		console.log('NONOS: Back navigation - use browser window controls');
+		const browser = (window as any).__nonosBrowser;
+		if (browser?.goBack) {
+			browser.goBack();
+		}
 	}
 
 	function handleForward() {
-		// Back/forward with native windows - just show info
-		console.log('NONOS: Forward navigation - use browser window controls');
+		const browser = (window as any).__nonosBrowser;
+		if (browser?.goForward) {
+			browser.goForward();
+		}
 	}
 
 	function handleReload() {
-		if (url) {
-			navigate();
+		const browser = (window as any).__nonosBrowser;
+		if (browser?.reload) {
+			browser.reload();
+		}
+	}
+
+	function handleHome() {
+		url = '';
+		const browser = (window as any).__nonosBrowser;
+		if (browser?.goHome) {
+			browser.goHome();
+		} else {
+			browserStore.clearUrl();
 		}
 	}
 
@@ -105,6 +92,12 @@
 				<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
 			</svg>
 		</button>
+		<button class="nav-btn" on:click={handleHome} title="Home" aria-label="Home">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+				<path d="M9 22V12h6v10"/>
+			</svg>
+		</button>
 	</div>
 
 	<form class="url-bar" on:submit|preventDefault={navigate}>
@@ -120,7 +113,7 @@
 					<circle cx="12" cy="12" r="10" />
 					<path d="M12 8v4M12 16h.01" />
 				</svg>
-				<span class="security-text">Not Connected</span>
+				<span class="security-text">Connecting...</span>
 			{/if}
 		</div>
 		<input
