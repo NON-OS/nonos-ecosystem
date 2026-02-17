@@ -81,7 +81,7 @@ ark-crypto-primitives = { version = "0.4", features = ["r1cs", "sponge"] }
 dirs = "5.0"
 
 # HTTP client
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "socks"] }
 
 # HTTP server (production-grade)
 axum = { version = "0.7", features = ["tokio", "json", "matched-path"] }
