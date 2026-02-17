@@ -9,7 +9,7 @@
   },
   "package": {
     "productName": "NONOS Ecosystem",
-    "version": "1.0.2"
+    "version": "1.0.25"
   },
   "tauri": {
     "allowlist": {
