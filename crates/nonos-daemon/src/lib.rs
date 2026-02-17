@@ -14,12 +14,14 @@ pub mod api;
 pub mod tokenomics;
 pub mod supervisor;
 pub mod geo;
+pub mod http_client;
 
 pub use node::{Node, CheckResult, DiagnosticReport};
 pub use p2p::{P2pNetwork, PeerInfo, NetworkStats, NetworkEvent, P2pMessage, topics};
 pub use metrics::{NodeMetricsCollector, PrometheusExporter};
 pub use rewards::RewardTracker;
-pub use config::{NodeConfig, ServicesConfig, NetworkConfig, RewardsConfig, ApiConfig};
+pub use config::{NodeConfig, ServicesConfig, NetworkConfig, RewardsConfig, ApiConfig, AnyoneNetworkConfig, SecurityLevel};
+pub use http_client::{ProxiedHttpClient, RpcClient};
 pub use contracts::{ContractClient, ContractConfig, EPOCH_DURATION_SECS, current_epoch};
 pub use storage::{NodeStorage, StorageConfig};
 pub use services::{ServiceManager, ServiceConfig, ServiceType, ServiceState};
