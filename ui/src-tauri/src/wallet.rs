@@ -1,7 +1,11 @@
-use crate::blockchain::{fetch_real_balances, send_transaction, send_transaction_with_gas, estimate_gas, NOX_TOKEN_ADDRESS};
-use crate::helpers::{format_wei, generate_mnemonic, derive_keys_from_mnemonic};
+use crate::blockchain::{
+    estimate_gas, fetch_real_balances, send_transaction, send_transaction_with_gas,
+    NOX_TOKEN_ADDRESS,
+};
+use crate::helpers::{derive_keys_from_mnemonic, format_wei, generate_mnemonic};
 use crate::state::AppState;
 use crate::types::WalletStatusResponse;
+use crate::wallet_storage::{load_wallet, save_wallet, wallet_exists, WalletData};
 use tauri::State;
 
 #[tauri::command]
@@ -41,10 +45,22 @@ pub async fn wallet_get_status(state: State<'_, AppState>) -> Result<WalletStatu
 #[tauri::command]
 pub async fn wallet_create(
     state: State<'_, AppState>,
-    _password: String,
+    password: String,
 ) -> Result<String, String> {
+    if password.len() < 8 {
+        return Err("Password must be at least 8 characters".into());
+    }
+
     let mnemonic = generate_mnemonic();
     let (address, private_key) = derive_keys_from_mnemonic(&mnemonic);
+
+    let wallet_data = WalletData {
+        mnemonic: mnemonic.clone(),
+        address: address.clone(),
+        private_key: private_key.clone(),
+    };
+
+    save_wallet(&password, &wallet_data)?;
 
     let mut wallet = state.wallet.write().await;
     wallet.initialized = true;
@@ -60,14 +76,26 @@ pub async fn wallet_create(
 pub async fn wallet_import(
     state: State<'_, AppState>,
     mnemonic: String,
-    _password: String,
+    password: String,
 ) -> Result<(), String> {
+    if password.len() < 8 {
+        return Err("Password must be at least 8 characters".into());
+    }
+
     let word_count = mnemonic.split_whitespace().count();
     if word_count != 12 && word_count != 24 {
         return Err("Invalid mnemonic: must be 12 or 24 words".into());
     }
 
     let (address, private_key) = derive_keys_from_mnemonic(&mnemonic);
+
+    let wallet_data = WalletData {
+        mnemonic: mnemonic.clone(),
+        address: address.clone(),
+        private_key: private_key.clone(),
+    };
+
+    save_wallet(&password, &wallet_data)?;
 
     let mut wallet = state.wallet.write().await;
     wallet.initialized = true;
@@ -80,17 +108,20 @@ pub async fn wallet_import(
 }
 
 #[tauri::command]
-pub async fn wallet_unlock(
-    state: State<'_, AppState>,
-    _password: String,
-) -> Result<(), String> {
-    let mut wallet = state.wallet.write().await;
-
-    if !wallet.initialized {
-        return Err("Wallet not initialized".into());
+pub async fn wallet_unlock(state: State<'_, AppState>, password: String) -> Result<(), String> {
+    if !wallet_exists() {
+        return Err("No wallet found".into());
     }
 
+    let data = load_wallet(&password)?;
+
+    let mut wallet = state.wallet.write().await;
+    wallet.initialized = true;
     wallet.locked = false;
+    wallet.address = Some(data.address.clone());
+    wallet.private_key = Some(data.private_key.clone());
+    wallet.mnemonic = Some(data.mnemonic.clone());
+
     Ok(())
 }
 
@@ -98,6 +129,8 @@ pub async fn wallet_unlock(
 pub async fn wallet_lock(state: State<'_, AppState>) -> Result<(), String> {
     let mut wallet = state.wallet.write().await;
     wallet.locked = true;
+    wallet.private_key = None;
+    wallet.mnemonic = None;
     Ok(())
 }
 
@@ -119,11 +152,9 @@ pub async fn wallet_send_eth(
         return Err("Wallet locked or not initialized".into());
     }
 
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
+    let private_key = wallet.private_key.clone().ok_or("Private key not available")?;
 
-    let amount_eth: f64 = amount.parse()
-        .map_err(|_| "Invalid amount")?;
+    let amount_eth: f64 = amount.parse().map_err(|_| "Invalid amount")?;
     let amount_wei = (amount_eth * 1e18) as u128;
 
     if amount_wei > wallet.eth_balance {
@@ -150,26 +181,36 @@ pub async fn wallet_send_nox(
             return Err("Wallet locked or not initialized".into());
         }
 
-        let pk = wallet.private_key.clone().ok_or("Private key not available")?;
-        let addr = wallet.address.clone().ok_or("Wallet address not available")?;
+        let pk = wallet
+            .private_key
+            .clone()
+            .ok_or("Private key not available")?;
+        let addr = wallet
+            .address
+            .clone()
+            .ok_or("Wallet address not available")?;
         (pk, addr)
     };
 
-    let amount_nox: f64 = amount.parse()
-        .map_err(|_| "Invalid amount")?;
+    let amount_nox: f64 = amount.parse().map_err(|_| "Invalid amount")?;
     let amount_wei = (amount_nox * 1e18) as u128;
 
     let (eth_balance, nox_balance) = fetch_real_balances(&from_address).await;
 
     if amount_wei > nox_balance {
-        return Err(format!("Insufficient NOX balance. You have {} NOX, trying to send {} NOX",
-            nox_balance as f64 / 1e18, amount_nox));
+        return Err(format!(
+            "Insufficient NOX balance. You have {} NOX, trying to send {} NOX",
+            nox_balance as f64 / 1e18,
+            amount_nox
+        ));
     }
 
     let min_gas_eth = 3_000_000_000_000_000u128;
     if eth_balance < min_gas_eth {
-        return Err(format!("Insufficient ETH for gas. You have {} ETH, need at least 0.003 ETH",
-            eth_balance as f64 / 1e18));
+        return Err(format!(
+            "Insufficient ETH for gas. You have {} ETH, need at least 0.003 ETH",
+            eth_balance as f64 / 1e18
+        ));
     }
 
     let to_padded = format!("{:0>64}", to.trim_start_matches("0x").to_lowercase());
@@ -184,7 +225,14 @@ pub async fn wallet_send_nox(
     let transfer_data_bytes = hex::decode(transfer_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let tx_hash = send_transaction_with_gas(&private_key, NOX_TOKEN_ADDRESS, 0, transfer_data_bytes, estimated_gas).await?;
+    let tx_hash = send_transaction_with_gas(
+        &private_key,
+        NOX_TOKEN_ADDRESS,
+        0,
+        transfer_data_bytes,
+        estimated_gas,
+    )
+    .await?;
 
     Ok(format!("Sent {} NOX! Tx: {}", amount_nox, tx_hash))
 }
@@ -200,4 +248,9 @@ pub async fn wallet_get_transactions(
     }
 
     Ok(vec![])
+}
+
+#[tauri::command]
+pub async fn wallet_check_exists() -> Result<bool, String> {
+    Ok(wallet_exists())
 }
