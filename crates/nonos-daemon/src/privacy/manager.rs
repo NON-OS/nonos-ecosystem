@@ -1,4 +1,7 @@
-use super::{ZkIdentityService, CacheMixingService, TrackingBlockerService, StealthScannerService};
+use super::{
+    ZkIdentityService, CacheMixingService, TrackingBlockerService, StealthScannerService,
+    ZkIdentityRegistry, NoteMixer,
+};
 use nonos_types::{NodeId, NonosResult};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,6 +12,8 @@ pub struct PrivacyServiceManager {
     pub cache_mixing: Arc<CacheMixingService>,
     pub tracking_blocker: Arc<TrackingBlockerService>,
     pub stealth_scanner: Arc<StealthScannerService>,
+    pub identity_registry: Arc<ZkIdentityRegistry>,
+    pub note_mixer: Arc<NoteMixer>,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -19,6 +24,8 @@ impl PrivacyServiceManager {
             cache_mixing: Arc::new(CacheMixingService::new(node_id, 10000)),
             tracking_blocker: Arc::new(TrackingBlockerService::new(node_id)),
             stealth_scanner: Arc::new(StealthScannerService::new(node_id)),
+            identity_registry: Arc::new(ZkIdentityRegistry::new()),
+            note_mixer: Arc::new(NoteMixer::new()),
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -51,6 +58,9 @@ impl PrivacyServiceManager {
             if let Err(e) = stealth.run(s4).await { error!("Stealth Scanner error: {}", e); }
         });
 
+        info!("ZK Identity Registry initialized");
+        info!("Note Mixer initialized");
+
         info!("All privacy services started");
         Ok(())
     }
@@ -65,6 +75,8 @@ impl PrivacyServiceManager {
         let (cache_hits, cache_misses, mix_ops) = self.cache_mixing.stats();
         let (blocked, total, fingerprint) = self.tracking_blocker.stats();
         let (payments, scanned) = self.stealth_scanner.stats();
+        let (id_registrations, id_passed, id_failed) = self.identity_registry.stats();
+        let (note_deposits, note_spends, note_failed) = self.note_mixer.stats();
 
         PrivacyStats {
             zk_proofs_issued: zk_issued,
@@ -77,6 +89,12 @@ impl PrivacyServiceManager {
             fingerprint_blocked: fingerprint,
             stealth_payments: payments,
             stealth_scanned: scanned,
+            identity_registrations: id_registrations,
+            identity_verifications_passed: id_passed,
+            identity_verifications_failed: id_failed,
+            note_deposits,
+            note_spends,
+            note_failed_spends: note_failed,
         }
     }
 }
@@ -93,6 +111,12 @@ pub struct PrivacyStats {
     pub fingerprint_blocked: u64,
     pub stealth_payments: u64,
     pub stealth_scanned: u64,
+    pub identity_registrations: u64,
+    pub identity_verifications_passed: u64,
+    pub identity_verifications_failed: u64,
+    pub note_deposits: u64,
+    pub note_spends: u64,
+    pub note_failed_spends: u64,
 }
 
 impl std::fmt::Display for PrivacyStats {
@@ -100,6 +124,10 @@ impl std::fmt::Display for PrivacyStats {
         writeln!(f, "NONOS Privacy Statistics")?;
         writeln!(f, "========================")?;
         writeln!(f, "ZK Identity: {} issued, {} verified", self.zk_proofs_issued, self.zk_verifications)?;
+        writeln!(f, "Identity Registry: {} registered, {} passed, {} failed",
+            self.identity_registrations, self.identity_verifications_passed, self.identity_verifications_failed)?;
+        writeln!(f, "Note Mixer: {} deposits, {} spends, {} failed",
+            self.note_deposits, self.note_spends, self.note_failed_spends)?;
         writeln!(f, "Cache: {} hits, {} misses, {} mix ops", self.cache_hits, self.cache_misses, self.cache_mix_ops)?;
         writeln!(f, "Tracker: {} blocked/{} total, {} fingerprint", self.tracking_blocked, self.tracking_total, self.fingerprint_blocked)?;
         writeln!(f, "Stealth: {} payments, {} scanned", self.stealth_payments, self.stealth_scanned)?;
