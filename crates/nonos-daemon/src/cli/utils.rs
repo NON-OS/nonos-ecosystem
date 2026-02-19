@@ -52,6 +52,18 @@ pub fn print_banner() {
     println!("\x1b[0m");
     println!("        \x1b[38;5;245mDecentralized Node Daemon - v{}\x1b[0m", BUILD_VERSION);
     println!();
+    println!("  \x1b[38;5;245m┌─────────────────────────────────────────────────────────┐\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[1;38;5;207mPrivacy Infrastructure Beta\x1b[0m                             \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m├─────────────────────────────────────────────────────────┤\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Network Privacy Architecture                           \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Poseidon Canonicalization                              \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m ZK Identity Binding (Groth16)                          \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Groth16 Key Stabilization                              \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Privacy Mixer Infrastructure                           \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Wallet Hardening (XChaCha20-Poly1305)                  \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m│\x1b[0m \x1b[38;5;46m✓\x1b[0m Anyone Proxy Hardening                                 \x1b[38;5;245m│\x1b[0m");
+    println!("  \x1b[38;5;245m└─────────────────────────────────────────────────────────┘\x1b[0m");
+    println!();
 }
 
 pub fn load_contract_config() -> NonosResult<ContractConfig> {
