@@ -4984,7 +4984,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-anyone"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5004,7 +5004,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-app"
-version = "1.0.1"
+version = "1.0.3"
 dependencies = [
  "bip39",
  "dirs",
@@ -5015,6 +5015,8 @@ dependencies = [
  "hyper-util",
  "k256",
  "native-tls",
+ "nonos-crypto",
+ "nonos-types",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "serde",
@@ -5027,11 +5029,12 @@ dependencies = [
  "tokio-socks",
  "url",
  "urlencoding",
+ "zeroize",
 ]
 
 [[package]]
 name = "nonos-browser"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5054,7 +5057,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-crypto"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -5071,6 +5074,9 @@ dependencies = [
  "base64 0.21.7",
  "bip39",
  "blake3",
+ "chacha20poly1305",
+ "chrono",
+ "clap",
  "criterion",
  "ed25519-dalek",
  "hex",
@@ -5080,6 +5086,7 @@ dependencies = [
  "rand_core 0.6.4",
  "secp256k1",
  "serde",
+ "serde_json",
  "sha2",
  "sha3",
  "subtle",
@@ -5090,7 +5097,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-daemon"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5134,6 +5141,7 @@ dependencies = [
  "serde_json",
  "sled",
  "sodiumoxide",
+ "subtle",
  "sysinfo",
  "thiserror 1.0.69",
  "tokio",
@@ -5146,11 +5154,12 @@ dependencies = [
  "tracing-subscriber 0.3.22",
  "uuid 1.19.0",
  "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]
 name = "nonos-dash"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5169,7 +5178,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-types"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "blake3",
  "chrono",
@@ -5182,7 +5191,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-wallet"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "chrono",
