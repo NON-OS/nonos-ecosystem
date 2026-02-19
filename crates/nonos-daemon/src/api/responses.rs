@@ -105,6 +105,12 @@ pub struct PrivacyStatsResponse {
     pub tracking_blocked: u64,
     pub tracking_total: u64,
     pub tracking_block_rate: f64,
+    pub identity_registrations: u64,
+    pub identity_verifications_passed: u64,
+    pub identity_verifications_failed: u64,
+    pub note_deposits: u64,
+    pub note_spends: u64,
+    pub note_failed_spends: u64,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +149,78 @@ pub struct IdentityRegisterResponse {
 #[derive(Serialize)]
 pub struct IdentityRootResponse {
     pub root: String,
+}
+
+#[derive(Deserialize)]
+pub struct ZkIdentityRegisterRequest {
+    pub secret: String,
+    pub blinding: String,
+}
+
+#[derive(Serialize)]
+pub struct ZkIdentityRegisterResponse {
+    pub success: bool,
+    pub commitment: String,
+    pub index: usize,
+    pub merkle_root: String,
+}
+
+#[derive(Deserialize)]
+pub struct ZkIdentityVerifyRequest {
+    pub proof: String,
+    pub merkle_root: String,
+    pub nullifier: String,
+    pub scope: String,
+    pub signal_hash: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ZkIdentityVerifyResponse {
+    pub valid: bool,
+    pub reason: Option<String>,
+    pub nullifier_recorded: bool,
+}
+
+#[derive(Deserialize)]
+pub struct NoteDepositRequest {
+    pub secret: String,
+    pub amount: String,
+    pub asset: String,
+    pub randomness: String,
+}
+
+#[derive(Serialize)]
+pub struct NoteDepositResponse {
+    pub success: bool,
+    pub commitment: String,
+    pub index: usize,
+    pub merkle_root: String,
+}
+
+#[derive(Deserialize)]
+pub struct NoteSpendRequest {
+    pub merkle_root: String,
+    pub nullifier: String,
+    pub recipient: String,
+    pub fee: String,
+    pub proof: String,
+}
+
+#[derive(Serialize)]
+pub struct NoteSpendResponse {
+    pub success: bool,
+    pub reason: Option<String>,
+    pub tx_hash: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct MixerStatusResponse {
+    pub note_count: usize,
+    pub spent_count: usize,
+    pub merkle_root: String,
+    pub deposits: u64,
+    pub spends: u64,
+    pub failed_spends: u64,
 }
 
 #[derive(Serialize)]
