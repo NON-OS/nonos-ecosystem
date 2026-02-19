@@ -29,22 +29,20 @@ pub async fn proxy_fetch(
         nodes.total_requests.fetch_add(1, Ordering::Relaxed);
     }
 
-    let client = if is_connected {
-        let proxy = reqwest::Proxy::all(format!("socks5h://{}", socks_addr))
-            .map_err(|e| format!("Failed to create proxy: {}", e))?;
+    // EGRESS ENFORCEMENT: All browser requests MUST go through proxy
+    if !is_connected {
+        return Err("Network not connected. All requests must route through Anyone Network.".into());
+    }
 
-        reqwest::Client::builder()
-            .proxy(proxy)
-            .danger_accept_invalid_certs(false)
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .map_err(|e| format!("Failed to build proxy client: {}", e))?
-    } else {
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("Failed to build client: {}", e))?
-    };
+    let proxy = reqwest::Proxy::all(format!("socks5h://{}", socks_addr))
+        .map_err(|e| format!("Failed to create proxy: {}", e))?;
+
+    let client = reqwest::Client::builder()
+        .proxy(proxy)
+        .danger_accept_invalid_certs(false)
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to build proxy client: {}", e))?;
 
     let method_str = method.unwrap_or_else(|| "GET".to_string());
     let method = reqwest::Method::from_bytes(method_str.as_bytes())
