@@ -61,9 +61,12 @@ pub fn init_node(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&p2p_identity_path)?.permissions();
+            let mut perms = std::fs::metadata(&p2p_identity_path)
+                .map_err(|e| nonos_types::NonosError::Storage(format!("Failed to get metadata: {}", e)))?
+                .permissions();
             perms.set_mode(0o600);
-            std::fs::set_permissions(&p2p_identity_path, perms)?;
+            std::fs::set_permissions(&p2p_identity_path, perms)
+                .map_err(|e| nonos_types::NonosError::Storage(format!("Failed to set permissions: {}", e)))?;
         }
 
         let peer_id = keypair.public().to_peer_id();
