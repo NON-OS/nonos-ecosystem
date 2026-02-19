@@ -14,6 +14,7 @@ mod staking;
 mod state;
 mod types;
 mod wallet;
+mod wallet_storage;
 
 use state::AppState;
 use tauri::Manager;
@@ -68,6 +69,7 @@ fn main() {
                         sendEth: (to, amount) => window.__TAURI__.invoke('wallet_send_eth', { to, amount: String(amount) }),
                         sendNox: (to, amount) => window.__TAURI__.invoke('wallet_send_nox', { to, amount: String(amount) }),
                         getTransactions: () => window.__TAURI__.invoke('wallet_get_transactions'),
+                        exists: () => window.__TAURI__.invoke('wallet_check_exists'),
                     },
                     staking: {
                         getStatus: () => window.__TAURI__.invoke('staking_get_status'),
@@ -135,6 +137,7 @@ fn main() {
             wallet::wallet_send_eth,
             wallet::wallet_send_nox,
             wallet::wallet_get_transactions,
+            wallet::wallet_check_exists,
             staking::staking_get_status,
             staking::staking_stake,
             staking::staking_unstake,
