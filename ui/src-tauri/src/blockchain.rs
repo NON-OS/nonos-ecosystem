@@ -1,5 +1,6 @@
 use k256::ecdsa::SigningKey;
 use tiny_keccak::{Hasher, Keccak};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const RPC_ENDPOINTS: &[&str] = &[
     "https://ethereum.publicnode.com",
@@ -12,8 +13,32 @@ pub const NOX_TOKEN_ADDRESS: &str = "0x0a26c80Be4E060e688d7C23aDdB92cBb5D2C9eCA"
 pub const NOX_STAKING_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 pub const BALANCE_OF_SELECTOR: &str = "70a08231";
 
+const SOCKS_PROXY: &str = "socks5h://127.0.0.1:9050";
+static PROXY_ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub fn set_proxy_enabled(enabled: bool) {
+    PROXY_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+fn build_client() -> Result<reqwest::Client, String> {
+    if PROXY_ENABLED.load(Ordering::SeqCst) {
+        let proxy = reqwest::Proxy::all(SOCKS_PROXY)
+            .map_err(|e| format!("Failed to create proxy: {}", e))?;
+        reqwest::Client::builder()
+            .proxy(proxy)
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("Failed to build proxied client: {}", e))
+    } else {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("Failed to build client: {}", e))
+    }
+}
+
 pub async fn eth_call(to: &str, data: &str) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
@@ -56,7 +81,7 @@ pub async fn eth_call(to: &str, data: &str) -> Result<String, String> {
 }
 
 pub async fn get_eth_balance(address: &str) -> Result<u128, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
@@ -115,7 +140,7 @@ pub async fn fetch_real_balances(address: &str) -> (u128, u128) {
 }
 
 pub async fn get_nonce(address: &str) -> Result<u64, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
@@ -149,7 +174,7 @@ pub async fn get_nonce(address: &str) -> Result<u64, String> {
 }
 
 pub async fn get_gas_price() -> Result<u128, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
@@ -183,7 +208,7 @@ pub async fn get_gas_price() -> Result<u128, String> {
 }
 
 pub async fn estimate_gas(from: &str, to: &str, data: &str) -> Result<u64, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
@@ -225,7 +250,7 @@ pub async fn estimate_gas(from: &str, to: &str, data: &str) -> Result<u64, Strin
 }
 
 pub async fn send_raw_transaction(signed_tx: &str) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = build_client()?;
 
     for endpoint in RPC_ENDPOINTS {
         let payload = serde_json::json!({
