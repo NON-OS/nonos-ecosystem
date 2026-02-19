@@ -111,7 +111,7 @@ fn poseidon_hash_native(left: Fr, right: Fr) -> Fr {
     let config = poseidon_config();
     let mut state = [Fr::from(0u64), left, right];
     poseidon_permute_native(&mut state, &config);
-    state[1]
+    state[0] // Canonical: output first element
 }
 
 fn poseidon_hash_three(a: Fr, b: Fr, c: Fr) -> Fr {
@@ -176,7 +176,7 @@ fn poseidon_hash_gadget(
         state = new_state;
     }
 
-    Ok(state[1].clone())
+    Ok(state[0].clone()) // Canonical: output first element
 }
 
 fn apply_mds_gadget(
