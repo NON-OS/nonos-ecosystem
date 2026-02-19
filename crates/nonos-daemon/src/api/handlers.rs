@@ -188,6 +188,20 @@ pub async fn handle_request(
             identity_register(&mut stream, &privacy, &body).await
         }
         ("GET", "/api/privacy/identity/root") => identity_root(&mut stream, &privacy).await,
+        ("POST", "/api/privacy/zk/register") => {
+            zk_identity_register(&mut stream, &privacy, &body).await
+        }
+        ("POST", "/api/privacy/zk/verify") => {
+            zk_identity_verify(&mut stream, &privacy, &body).await
+        }
+        ("GET", "/api/privacy/zk/root") => zk_identity_root(&mut stream, &privacy).await,
+        ("GET", "/api/privacy/mixer/status") => mixer_status(&mut stream, &privacy).await,
+        ("POST", "/api/privacy/mixer/deposit") => {
+            mixer_deposit(&mut stream, &privacy, &body).await
+        }
+        ("POST", "/api/privacy/mixer/spend") => {
+            mixer_spend(&mut stream, &privacy, &body).await
+        }
         ("GET", "/api/staking/info") => {
             staking_info(&mut stream, &contract_client, staker_address).await
         }
