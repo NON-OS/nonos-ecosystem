@@ -1,6 +1,6 @@
 [package]
 name = "nonos-app"
-version = "1.0.25"
+version = "1.0.3"
 description = "NONOS Ecosystem - Zero-trust privacy browser powered by Anyone Network"
 authors = ["NON-OS <team@nonos.systems>"]
 license = "AGPL-3.0"
@@ -32,6 +32,9 @@ tiny-keccak = { version = "2.0", features = ["keccak"] }
 k256 = { version = "0.13", features = ["ecdsa"] }
 rand = "0.8"
 hex = "0.4"
+nonos-crypto = { workspace = true }
+nonos-types = { workspace = true }
+zeroize = { workspace = true }
 
 [features]
 default = ["custom-protocol"]
