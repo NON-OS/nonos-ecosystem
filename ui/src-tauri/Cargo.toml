@@ -32,8 +32,10 @@ tiny-keccak = { version = "2.0", features = ["keccak"] }
 k256 = { version = "0.13", features = ["ecdsa"] }
 rand = "0.8"
 hex = "0.4"
+lazy_static = "1.4"
 nonos-crypto = { workspace = true }
 nonos-types = { workspace = true }
+nonos-wallet = { workspace = true }
 zeroize = { workspace = true }
 
 [features]
