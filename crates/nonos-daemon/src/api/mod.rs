@@ -1,3 +1,5 @@
+mod blockchain_handlers;
+mod core_handlers;
 mod handlers;
 mod middleware;
 mod node_handlers;
@@ -6,7 +8,7 @@ mod responses;
 mod rewards_handlers;
 mod server;
 mod staking_handlers;
-mod blockchain_handlers;
+mod work_handlers;
 
 pub use middleware::{
     ApiAuthenticator, ApiContext, ApiRateLimiter, AuthResult, RateLimitResult, RequestHeaders,
