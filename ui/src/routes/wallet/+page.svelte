@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	// Simple QR code generation using canvas
 	async function generateQRCode(text: string): Promise<string> {
@@ -60,34 +60,35 @@
 
 	let balanceInterval: ReturnType<typeof setInterval>;
 
-	onMount(async () => {
-		// Wait for NONOS bridge to be injected (may take a moment on startup)
-		let retries = 0;
-		while (!window.nonos && retries < 20) {
-			await new Promise(r => setTimeout(r, 250));
-			retries++;
-		}
-
-		if (!window.nonos) {
-			error = 'NONOS bridge not available. Please restart the app.';
-			console.error('window.nonos not found after retries');
-			return;
-		}
-
-		console.log('NONOS bridge ready:', window.nonos.version);
-		await checkWallet();
-
-		// Auto-refresh balances every 10 seconds
-		balanceInterval = setInterval(async () => {
-			if (walletState === 'unlocked') {
-				await updateBalances();
+	onMount(() => {
+		const init = async () => {
+			let retries = 0;
+			while (!window.nonos && retries < 20) {
+				await new Promise(r => setTimeout(r, 250));
+				retries++;
 			}
-		}, 10000);
 
-		// Cleanup on unmount
-		return () => {
-			if (balanceInterval) clearInterval(balanceInterval);
+			if (!window.nonos) {
+				error = 'NONOS bridge not available. Please restart the app.';
+				console.error('window.nonos not found after retries');
+				return;
+			}
+
+			console.log('NONOS bridge ready:', window.nonos.version);
+			await checkWallet();
+
+			balanceInterval = setInterval(async () => {
+				if (walletState === 'unlocked') {
+					await updateBalances();
+				}
+			}, 10000);
 		};
+
+		init();
+	});
+
+	onDestroy(() => {
+		if (balanceInterval) clearInterval(balanceInterval);
 	});
 
 	async function checkWallet() {
