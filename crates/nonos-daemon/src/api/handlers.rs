@@ -1,13 +1,14 @@
+use super::core_handlers::*;
 use super::middleware::{ApiContext, AuthResult, RateLimitResult, RequestHeaders};
 use super::node_handlers::*;
 use super::privacy_handlers::*;
-use super::responses::*;
 use super::rewards_handlers::*;
 use super::staking_handlers::*;
+use super::work_handlers::*;
 use crate::contracts::ContractClient;
 use crate::rewards::RewardTracker;
-use crate::{Node, NodeMetricsCollector, PrivacyServiceManager, PrometheusExporter};
-use nonos_types::{EthAddress, NodeStatus, NonosError, NonosResult};
+use crate::{Node, NodeMetricsCollector, PrivacyServiceManager};
+use nonos_types::{EthAddress, NonosError, NonosResult};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -168,93 +169,69 @@ pub async fn handle_request(
         String::new()
     };
 
+    route_request(&mut stream, method, path, &body, &node, &metrics, &privacy, &contract_client, &reward_tracker, staker_address).await
+}
+
+async fn route_request(
+    stream: &mut TcpStream,
+    method: &str,
+    path: &str,
+    body: &str,
+    node: &Arc<RwLock<Node>>,
+    metrics: &Arc<NodeMetricsCollector>,
+    privacy: &Option<Arc<PrivacyServiceManager>>,
+    contract_client: &Option<Arc<RwLock<ContractClient>>>,
+    reward_tracker: &Option<Arc<RewardTracker>>,
+    staker_address: Option<EthAddress>,
+) -> NonosResult<()> {
     match (method, path) {
-        ("GET", "/") => serve_dashboard(&mut stream).await,
-        ("GET", "/api/status") => serve_status(&mut stream, &node).await,
-        ("GET", "/api/metrics") => serve_metrics(&mut stream, &node).await,
-        ("GET", "/api/metrics/prometheus") => serve_prometheus(&mut stream, &metrics).await,
-        ("GET", "/api/health") => serve_health(&mut stream, &node).await,
-        ("GET", "/api/peers") => serve_peers(&mut stream, &node).await,
-        ("GET", "/api/diagnostics") => serve_diagnostics(&mut stream, &node).await,
-        ("POST", "/api/identity/rotate") => rotate_identity(&mut stream, &node).await,
-        ("GET", "/api/privacy/stats") => serve_privacy_stats(&mut stream, &privacy).await,
-        ("POST", "/api/privacy/tracking/check") => {
-            tracking_check(&mut stream, &privacy, &body).await
-        }
-        ("POST", "/api/privacy/tracking/block") => {
-            tracking_block(&mut stream, &privacy, &body).await
-        }
-        ("POST", "/api/privacy/identity/register") => {
-            identity_register(&mut stream, &privacy, &body).await
-        }
-        ("GET", "/api/privacy/identity/root") => identity_root(&mut stream, &privacy).await,
-        ("POST", "/api/privacy/zk/register") => {
-            zk_identity_register(&mut stream, &privacy, &body).await
-        }
-        ("POST", "/api/privacy/zk/verify") => {
-            zk_identity_verify(&mut stream, &privacy, &body).await
-        }
-        ("GET", "/api/privacy/zk/root") => zk_identity_root(&mut stream, &privacy).await,
-        ("GET", "/api/privacy/mixer/status") => mixer_status(&mut stream, &privacy).await,
-        ("POST", "/api/privacy/mixer/deposit") => {
-            mixer_deposit(&mut stream, &privacy, &body).await
-        }
-        ("POST", "/api/privacy/mixer/spend") => {
-            mixer_spend(&mut stream, &privacy, &body).await
-        }
-        ("GET", "/api/staking/info") => {
-            staking_info(&mut stream, &contract_client, staker_address).await
-        }
-        ("GET", "/api/staking/balance") => {
-            staking_balance(&mut stream, &contract_client, staker_address).await
-        }
-        ("GET", "/api/staking/tier") => {
-            staking_tier(&mut stream, &contract_client, staker_address).await
-        }
-        ("POST", "/api/staking/stake") => staking_stake(&mut stream, &contract_client, &body).await,
-        ("POST", "/api/staking/unstake") => {
-            staking_unstake(&mut stream, &contract_client, &body).await
-        }
-        ("POST", "/api/staking/approve") => {
-            staking_approve(&mut stream, &contract_client, &body).await
-        }
-        ("POST", "/api/staking/set-tier") => {
-            staking_set_tier(&mut stream, &contract_client, &body).await
-        }
-        ("GET", "/api/rewards/pending") => {
-            rewards_pending(&mut stream, &contract_client, &reward_tracker, staker_address).await
-        }
-        ("POST", "/api/rewards/claim") => rewards_claim(&mut stream, &reward_tracker).await,
-        ("GET", "/api/rewards/history") => rewards_history(&mut stream, &reward_tracker).await,
-        ("POST", "/api/rewards/auto-claim/enable") => {
-            rewards_auto_claim_enable(&mut stream, &reward_tracker, &body).await
-        }
-        ("POST", "/api/rewards/auto-claim/disable") => {
-            rewards_auto_claim_disable(&mut stream, &reward_tracker).await
-        }
-        ("GET", "/api/rewards/apy") => {
-            rewards_apy(&mut stream, &contract_client, staker_address).await
-        }
-        ("GET", "/api/v1/node/info") => serve_node_info(&mut stream, &node).await,
-        ("GET", "/api/v1/node/health") => serve_node_health(&mut stream, &node).await,
-        ("GET", "/api/v1/node/services") => serve_node_services(&mut stream, &node).await,
-        ("GET", "/api/v1/node/network") => serve_node_network(&mut stream, &node).await,
-        ("GET", "/api/v1/node/peers") => serve_node_peers(&mut stream, &node).await,
-        ("GET", "/api/v1/node/metrics") => serve_node_metrics(&mut stream, &node, &metrics).await,
-        ("GET", "/api/v1/node/rewards") => {
-            serve_node_rewards(
-                &mut stream,
-                &node,
-                &contract_client,
-                &reward_tracker,
-                staker_address,
-            )
-            .await
-        }
-        ("GET", "/api/v1/node/config") => serve_node_config(&mut stream, &node).await,
+        ("GET", "/") => serve_dashboard(stream).await,
+        ("GET", "/api/status") => serve_status(stream, node).await,
+        ("GET", "/api/metrics") => serve_metrics(stream, node).await,
+        ("GET", "/api/metrics/prometheus") => serve_prometheus(stream, metrics).await,
+        ("GET", "/api/health") => serve_health(stream, node).await,
+        ("GET", "/api/peers") => serve_peers(stream, node).await,
+        ("GET", "/api/diagnostics") => serve_diagnostics(stream, node).await,
+        ("POST", "/api/identity/rotate") => rotate_identity(stream, node).await,
+        ("GET", "/api/privacy/stats") => serve_privacy_stats(stream, privacy).await,
+        ("POST", "/api/privacy/tracking/check") => tracking_check(stream, privacy, body).await,
+        ("POST", "/api/privacy/tracking/block") => tracking_block(stream, privacy, body).await,
+        ("POST", "/api/privacy/identity/register") => identity_register(stream, privacy, body).await,
+        ("GET", "/api/privacy/identity/root") => identity_root(stream, privacy).await,
+        ("POST", "/api/privacy/zk/register") => zk_identity_register(stream, privacy, body).await,
+        ("POST", "/api/privacy/zk/verify") => zk_identity_verify(stream, privacy, body).await,
+        ("GET", "/api/privacy/zk/root") => zk_identity_root(stream, privacy).await,
+        ("GET", "/api/privacy/mixer/status") => mixer_status(stream, privacy).await,
+        ("POST", "/api/privacy/mixer/deposit") => mixer_deposit(stream, privacy, body).await,
+        ("POST", "/api/privacy/mixer/spend") => mixer_spend(stream, privacy, body).await,
+        ("GET", "/api/staking/info") => staking_info(stream, contract_client, staker_address).await,
+        ("GET", "/api/staking/balance") => staking_balance(stream, contract_client, staker_address).await,
+        ("GET", "/api/staking/tier") => staking_tier(stream, contract_client, staker_address).await,
+        ("POST", "/api/staking/stake") => staking_stake(stream, contract_client, body).await,
+        ("POST", "/api/staking/unstake") => staking_unstake(stream, contract_client, body).await,
+        ("POST", "/api/staking/approve") => staking_approve(stream, contract_client, body).await,
+        ("POST", "/api/staking/set-tier") => staking_set_tier(stream, contract_client, body).await,
+        ("GET", "/api/rewards/pending") => rewards_pending(stream, contract_client, reward_tracker, staker_address).await,
+        ("POST", "/api/rewards/claim") => rewards_claim(stream, reward_tracker).await,
+        ("GET", "/api/rewards/history") => rewards_history(stream, reward_tracker).await,
+        ("POST", "/api/rewards/auto-claim/enable") => rewards_auto_claim_enable(stream, reward_tracker, body).await,
+        ("POST", "/api/rewards/auto-claim/disable") => rewards_auto_claim_disable(stream, reward_tracker).await,
+        ("GET", "/api/rewards/apy") => rewards_apy(stream, contract_client, staker_address).await,
+        ("GET", "/api/v1/node/info") => serve_node_info(stream, node).await,
+        ("GET", "/api/v1/node/health") => serve_node_health(stream, node).await,
+        ("GET", "/api/v1/node/services") => serve_node_services(stream, node).await,
+        ("GET", "/api/v1/node/network") => serve_node_network(stream, node).await,
+        ("GET", "/api/v1/node/peers") => serve_node_peers(stream, node).await,
+        ("GET", "/api/v1/node/metrics") => serve_node_metrics(stream, node, metrics).await,
+        ("GET", "/api/v1/node/rewards") => serve_node_rewards(stream, node, contract_client, reward_tracker, staker_address).await,
+        ("GET", "/api/v1/node/config") => serve_node_config(stream, node).await,
+        ("GET", "/api/v1/work/metrics") => serve_work_metrics(stream, metrics).await,
+        ("GET", "/api/v1/work/epoch") => serve_epoch_info(stream, metrics).await,
+        ("POST", "/api/v1/work/epoch/advance") => check_epoch_advance(stream, metrics).await,
+        ("POST", "/api/v1/work/epoch/submit") => mark_epoch_submitted(stream, metrics).await,
         _ => {
             send_error_response(
-                &mut stream,
+                stream,
                 404,
                 "NOT_FOUND",
                 &format!("Endpoint not found: {} {}", method, path),
@@ -317,13 +294,7 @@ pub async fn send_error_response(
             "status": status
         }
     });
-    send_response(
-        stream,
-        status,
-        "application/json",
-        &body.to_string(),
-    )
-    .await
+    send_response(stream, status, "application/json", &body.to_string()).await
 }
 
 async fn send_cors_preflight(stream: &mut TcpStream) -> NonosResult<()> {
@@ -340,198 +311,4 @@ async fn send_cors_preflight(stream: &mut TcpStream) -> NonosResult<()> {
     })?;
 
     Ok(())
-}
-
-pub async fn serve_dashboard(stream: &mut TcpStream) -> NonosResult<()> {
-    let html = include_str!("../dashboard.html");
-    send_response(stream, 200, "text/html; charset=utf-8", html).await
-}
-
-async fn serve_status(stream: &mut TcpStream, node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    let node = node.read().await;
-    let metrics = node.metrics().await;
-
-    let response = StatusResponse {
-        node_id: metrics.node_id.to_string(),
-        status: format!("{:?}", metrics.status),
-        tier: format!("{:?}", metrics.tier),
-        uptime_secs: metrics.uptime_secs,
-        active_connections: metrics.active_connections as usize,
-        total_requests: metrics.total_requests,
-        successful_requests: metrics.successful_requests,
-        quality_score: metrics.quality.total(),
-        staked_nox: metrics.staked.raw as f64 / 1e18,
-        pending_rewards: metrics.pending_rewards.raw as f64 / 1e18,
-        streak_days: metrics.streak,
-    };
-
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
-    send_response(stream, 200, "application/json", &json).await
-}
-
-async fn serve_metrics(stream: &mut TcpStream, node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    let node = node.read().await;
-    let metrics = node.metrics().await;
-
-    let response = MetricsResponse {
-        node_id: metrics.node_id.to_string(),
-        quality: QualityMetrics {
-            uptime: metrics.quality.uptime,
-            success_rate: metrics.quality.success_rate,
-            latency_score: metrics.quality.latency_score,
-            reliability: metrics.quality.reliability,
-            total: metrics.quality.total(),
-        },
-        requests: RequestMetrics {
-            total: metrics.total_requests,
-            successful: metrics.successful_requests,
-            failed: metrics.total_requests.saturating_sub(metrics.successful_requests),
-        },
-        network: NetworkMetrics {
-            active_connections: metrics.active_connections as usize,
-            peer_count: if let Some(ref network) = node.network() {
-                network.read().await.peer_count()
-            } else {
-                0
-            },
-        },
-        rewards: RewardsMetrics {
-            staked_nox: metrics.staked.raw as f64 / 1e18,
-            pending_rewards: metrics.pending_rewards.raw as f64 / 1e18,
-            streak_days: metrics.streak,
-            tier: format!("{:?}", metrics.tier),
-        },
-    };
-
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
-    send_response(stream, 200, "application/json", &json).await
-}
-
-async fn serve_prometheus(
-    stream: &mut TcpStream,
-    metrics: &Arc<NodeMetricsCollector>,
-) -> NonosResult<()> {
-    let exporter = PrometheusExporter::new(metrics.clone());
-    let output = exporter.export();
-    send_response(stream, 200, "text/plain; charset=utf-8", &output).await
-}
-
-async fn serve_health(stream: &mut TcpStream, node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    let node = node.read().await;
-    let status = node.status().await;
-
-    let response = HealthResponse {
-        healthy: status == NodeStatus::Running,
-        status: format!("{:?}", status),
-        uptime_secs: node.uptime_secs(),
-    };
-
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
-    send_response(stream, 200, "application/json", &json).await
-}
-
-async fn serve_peers(stream: &mut TcpStream, node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    use crate::geo::{GeoCache, GeoLocation};
-
-    let node = node.read().await;
-    let geo_cache = GeoCache::new();
-
-    let live_peers = if let Some(ref network) = node.network() {
-        network.read().await.peers()
-    } else {
-        vec![]
-    };
-
-    let mut peers_geo: Vec<PeerGeoInfo> = Vec::new();
-
-    let bootstrap_nodes = vec![
-        ("bootstrap-amsterdam", "Amsterdam", "Netherlands", "NL", 52.37, 4.90),
-        ("bootstrap-sofia", "Sofia", "Bulgaria", "BG", 42.70, 23.32),
-        ("bootstrap-capetown", "Cape Town", "South Africa", "ZA", -33.92, 18.42),
-        ("bootstrap-budapest", "Budapest", "Hungary", "HU", 47.50, 19.04),
-    ];
-
-    for (id, city, country, code, lat, lon) in bootstrap_nodes {
-        peers_geo.push(PeerGeoInfo {
-            id: id.to_string(),
-            address: format!("/ip4/{}/tcp/9000", id),
-            lat,
-            lon,
-            city: city.to_string(),
-            country: country.to_string(),
-            country_code: code.to_string(),
-            latency_ms: Some(50),
-            connected: true,
-            is_bootstrap: true,
-        });
-    }
-
-    for peer in live_peers {
-        let addr = peer.addresses.first().cloned().unwrap_or_default();
-        let geo = if let Some(ip) = GeoCache::extract_ip(&addr) {
-            geo_cache.lookup(&ip).await.unwrap_or_default()
-        } else {
-            GeoLocation::default()
-        };
-
-        if geo.lat == 0.0 && geo.lon == 0.0 {
-            continue;
-        }
-
-        peers_geo.push(PeerGeoInfo {
-            id: peer.id.clone(),
-            address: addr,
-            lat: geo.lat,
-            lon: geo.lon,
-            city: geo.city,
-            country: geo.country,
-            country_code: geo.country_code,
-            latency_ms: peer.latency_ms,
-            connected: !peer.is_banned,
-            is_bootstrap: false,
-        });
-    }
-
-    let response = PeersResponse {
-        count: peers_geo.len(),
-        peers: peers_geo,
-    };
-
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
-    send_response(stream, 200, "application/json", &json).await
-}
-
-async fn serve_diagnostics(stream: &mut TcpStream, node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    let node = node.read().await;
-    let report = node.diagnose().await;
-
-    let checks: Vec<DiagnosticCheck> = report
-        .checks()
-        .iter()
-        .map(|(name, result)| {
-            let (status, message) = match result {
-                crate::CheckResult::Pass(msg) => ("pass", msg.clone()),
-                crate::CheckResult::Warn(msg) => ("warn", msg.clone()),
-                crate::CheckResult::Fail(msg) => ("fail", msg.clone()),
-            };
-            DiagnosticCheck {
-                name: name.clone(),
-                status: status.to_string(),
-                message,
-            }
-        })
-        .collect();
-
-    let response = DiagnosticsResponse {
-        all_passed: report.all_passed(),
-        checks,
-    };
-
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
-    send_response(stream, 200, "application/json", &json).await
-}
-
-async fn rotate_identity(stream: &mut TcpStream, _node: &Arc<RwLock<Node>>) -> NonosResult<()> {
-    let response = r#"{"success":true,"message":"Identity rotation scheduled"}"#;
-    send_response(stream, 200, "application/json", response).await
 }
