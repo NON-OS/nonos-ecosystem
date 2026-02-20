@@ -32,6 +32,12 @@ fn test_privacy_stats_serialization() {
         tracking_blocked: 1000,
         tracking_total: 5000,
         tracking_block_rate: 20.0,
+        identity_registrations: 50,
+        identity_verifications_passed: 45,
+        identity_verifications_failed: 5,
+        note_deposits: 30,
+        note_spends: 25,
+        note_failed_spends: 2,
     };
 
     let json = serde_json::to_string(&response).unwrap();
