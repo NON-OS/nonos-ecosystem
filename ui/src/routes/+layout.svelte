@@ -1,53 +1,55 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 
 	let networkStatus = { connected: false, bootstrap_progress: 0, circuits: 0 };
 	let walletAddress = '';
+	let statusInterval: ReturnType<typeof setInterval>;
 
-	onMount(async () => {
-		// Wait for NONOS bridge to be injected
-		let retries = 0;
-		while (!window.nonos && retries < 20) {
-			await new Promise(r => setTimeout(r, 250));
-			retries++;
-		}
+	onMount(() => {
+		const init = async () => {
+			let retries = 0;
+			while (!window.nonos && retries < 20) {
+				await new Promise(r => setTimeout(r, 250));
+				retries++;
+			}
 
-		if (window.nonos) {
-			console.log('NONOS Ecosystem bridge initialized - version:', window.nonos.version);
-		} else {
-			console.error('NONOS bridge not available');
-		}
+			if (window.nonos) {
+				console.log('NONOS Ecosystem bridge initialized - version:', window.nonos.version);
+			} else {
+				console.error('NONOS bridge not available');
+			}
 
-		// Poll network status
-		const updateStatus = async () => {
-			try {
-				if (window.nonos) {
-					networkStatus = await window.nonos.network.getStatus();
-					try {
-						walletAddress = await window.nonos.wallet.getAddress() || '';
-					} catch {
-						// Wallet may not be initialized
+			const updateStatus = async () => {
+				try {
+					if (window.nonos) {
+						networkStatus = await window.nonos.network.getStatus();
+						try {
+							walletAddress = await window.nonos.wallet.getAddress() || '';
+						} catch {}
 					}
+				} catch (e) {
+					console.error('Failed to get status:', e);
 				}
-			} catch (e) {
-				console.error('Failed to get status:', e);
+			};
+
+			updateStatus();
+			statusInterval = setInterval(updateStatus, 5000);
+
+			if (window.nonos?.onNetworkStatus) {
+				window.nonos.onNetworkStatus((status: typeof networkStatus) => {
+					networkStatus = status;
+				});
 			}
 		};
 
-		updateStatus();
-		const interval = setInterval(updateStatus, 5000);
+		init();
+	});
 
-		// Listen for real-time network updates
-		if (window.nonos?.onNetworkStatus) {
-			window.nonos.onNetworkStatus((status: typeof networkStatus) => {
-				networkStatus = status;
-			});
-		}
-
-		return () => clearInterval(interval);
+	onDestroy(() => {
+		if (statusInterval) clearInterval(statusInterval);
 	});
 </script>
 
