@@ -222,6 +222,14 @@ impl Wallet {
         sign_message(&private_key, hash)
     }
 
+    pub fn get_account_private_key(&self, account_index: u32) -> NonosResult<String> {
+        let master_key = self.master_key.as_ref()
+            .ok_or_else(|| NonosError::Wallet("Wallet is locked".into()))?;
+
+        let account_key = derive_secp256k1_key(master_key, 0, account_index);
+        Ok(hex::encode(account_key))
+    }
+
     pub fn sign_personal(&self, account_index: u32, message: &[u8]) -> NonosResult<EcdsaSignature> {
         let master_key = self.master_key.as_ref()
             .ok_or_else(|| NonosError::Wallet("Wallet is locked".into()))?;
