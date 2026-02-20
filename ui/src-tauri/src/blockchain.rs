@@ -1,6 +1,5 @@
 use k256::ecdsa::SigningKey;
 use tiny_keccak::{Hasher, Keccak};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const RPC_ENDPOINTS: &[&str] = &[
     "https://ethereum.publicnode.com",
@@ -14,27 +13,15 @@ pub const NOX_STAKING_ADDRESS: &str = "0x000000000000000000000000000000000000000
 pub const BALANCE_OF_SELECTOR: &str = "70a08231";
 
 const SOCKS_PROXY: &str = "socks5h://127.0.0.1:9050";
-static PROXY_ENABLED: AtomicBool = AtomicBool::new(true);
-
-pub fn set_proxy_enabled(enabled: bool) {
-    PROXY_ENABLED.store(enabled, Ordering::SeqCst);
-}
 
 fn build_client() -> Result<reqwest::Client, String> {
-    if PROXY_ENABLED.load(Ordering::SeqCst) {
-        let proxy = reqwest::Proxy::all(SOCKS_PROXY)
-            .map_err(|e| format!("Failed to create proxy: {}", e))?;
-        reqwest::Client::builder()
-            .proxy(proxy)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("Failed to build proxied client: {}", e))
-    } else {
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| format!("Failed to build client: {}", e))
-    }
+    let proxy = reqwest::Proxy::all(SOCKS_PROXY)
+        .map_err(|e| format!("Failed to create proxy: {}", e))?;
+    reqwest::Client::builder()
+        .proxy(proxy)
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build proxied client: {}", e))
 }
 
 pub async fn eth_call(to: &str, data: &str) -> Result<String, String> {
@@ -205,48 +192,6 @@ pub async fn get_gas_price() -> Result<u128, String> {
     }
 
     Err("Failed to get gas price".to_string())
-}
-
-pub async fn estimate_gas(from: &str, to: &str, data: &str) -> Result<u64, String> {
-    let client = build_client()?;
-
-    for endpoint in RPC_ENDPOINTS {
-        let payload = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "eth_estimateGas",
-            "params": [{
-                "from": from,
-                "to": to,
-                "data": data
-            }],
-            "id": 1
-        });
-
-        match client.post(*endpoint)
-            .header("Content-Type", "application/json")
-            .json(&payload)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if let Ok(json) = response.json::<serde_json::Value>().await {
-                    if let Some(result) = json.get("result").and_then(|r| r.as_str()) {
-                        let hex = result.trim_start_matches("0x");
-                        let gas = u64::from_str_radix(hex, 16)
-                            .map_err(|e| format!("Parse error: {}", e))?;
-                        return Ok(gas + (gas / 5));
-                    }
-                    if let Some(error) = json.get("error") {
-                        return Err(format!("Gas estimation failed: {}", error));
-                    }
-                }
-            }
-            Err(_) => continue,
-        }
-    }
-
-    Err("Failed to estimate gas".to_string())
 }
 
 pub async fn send_raw_transaction(signed_tx: &str) -> Result<String, String> {
