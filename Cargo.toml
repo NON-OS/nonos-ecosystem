@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 authors = ["NON-OS <team@nonos.systems>"]
 license = "AGPL-3.0"
