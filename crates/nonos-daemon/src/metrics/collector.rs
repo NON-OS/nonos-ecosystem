@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 use sysinfo::{Pid, System};
 use tracing::debug;
 
-use super::types::{MetricsSummary, P2pMetricsSummary, ServiceMetrics};
+use super::types::{MetricsSummary, P2pMetricsSummary, ServiceMetrics, WorkMetrics};
+use super::work_state::WorkState;
 
 const LATENCY_BUCKETS: &[u64] = &[1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 const MAX_WINDOW_SAMPLES: usize = 1000;
@@ -41,6 +42,7 @@ pub struct NodeMetricsCollector {
     p2p_rate_limit_hits: AtomicU64,
     pub(crate) api_requests: AtomicU64,
     pub(crate) api_errors: AtomicU64,
+    work: WorkState,
 }
 
 impl NodeMetricsCollector {
@@ -80,11 +82,16 @@ impl NodeMetricsCollector {
             p2p_rate_limit_hits: AtomicU64::new(0),
             api_requests: AtomicU64::new(0),
             api_errors: AtomicU64::new(0),
+            work: WorkState::new(),
         }
     }
 
     pub fn set_node_role(&self, role: &str) {
         *self.node_role.write() = Some(role.to_string());
+    }
+
+    pub fn set_node_id(&self, id: String) {
+        *self.node_id.write() = Some(id);
     }
 
     pub fn set_p2p_peers_connected(&self, count: u64) {
@@ -132,10 +139,6 @@ impl NodeMetricsCollector {
             peer_bans: self.p2p_peer_bans.load(Ordering::Relaxed),
             rate_limit_hits: self.p2p_rate_limit_hits.load(Ordering::Relaxed),
         }
-    }
-
-    pub fn set_node_id(&self, id: String) {
-        *self.node_id.write() = Some(id);
     }
 
     pub fn record_request(&self, success: bool, latency: Duration) {
@@ -277,13 +280,11 @@ impl NodeMetricsCollector {
             up_count as f64 / samples.len() as f64
         };
 
-        let reliability = success_rate;
-
         QualityScore {
             uptime,
             success_rate,
             latency_score,
-            reliability,
+            reliability: success_rate,
         }
     }
 
@@ -378,6 +379,74 @@ impl NodeMetricsCollector {
 
     pub fn total_latency_us(&self) -> u64 {
         self.total_latency_us.load(Ordering::Relaxed)
+    }
+
+    pub fn record_relay(&self, bytes: u64, success: bool, latency_ms: u64) {
+        self.work.record_relay(bytes, success, latency_ms);
+    }
+
+    pub fn record_zk_proof_generated(&self, generation_time_ms: u64) {
+        self.work.record_zk_proof_generated(generation_time_ms);
+    }
+
+    pub fn record_zk_proof_verified(&self, success: bool) {
+        self.work.record_zk_proof_verified(success);
+    }
+
+    pub fn record_mixer_deposit(&self, value: u128) {
+        self.work.record_mixer_deposit(value);
+    }
+
+    pub fn record_mixer_spend(&self, value: u128) {
+        self.work.record_mixer_spend(value);
+    }
+
+    pub fn record_mixer_pool_participation(&self) {
+        self.work.record_mixer_pool_participation();
+    }
+
+    pub fn record_entropy_contribution(&self, bytes: u64, quality_score: f64) {
+        self.work.record_entropy_contribution(bytes, quality_score);
+    }
+
+    pub fn record_entropy_request_served(&self) {
+        self.work.record_entropy_request_served();
+    }
+
+    pub fn record_registry_registration(&self) {
+        self.work.record_registry_registration();
+    }
+
+    pub fn record_registry_lookup(&self) {
+        self.work.record_registry_lookup();
+    }
+
+    pub fn record_registry_sync(&self) {
+        self.work.record_registry_sync();
+    }
+
+    pub fn record_registry_failure(&self) {
+        self.work.record_registry_failure();
+    }
+
+    pub fn epoch_info(&self) -> super::types::EpochInfo {
+        self.work.epoch_info()
+    }
+
+    pub fn check_epoch_advance(&self) -> bool {
+        self.work.check_epoch_advance()
+    }
+
+    pub fn mark_epoch_submitted(&self) {
+        self.work.mark_epoch_submitted();
+    }
+
+    pub fn reset_work_metrics(&self) {
+        self.work.reset();
+    }
+
+    pub fn work_summary(&self) -> WorkMetrics {
+        self.work.summary()
     }
 }
 
