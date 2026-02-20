@@ -6,6 +6,7 @@
 mod blockchain;
 mod browser;
 mod helpers;
+mod lp_staking;
 mod network;
 mod node;
 mod privacy;
@@ -14,7 +15,7 @@ mod staking;
 mod state;
 mod types;
 mod wallet;
-mod wallet_storage;
+mod work_metrics;
 
 use state::AppState;
 use tauri::Manager;
@@ -70,6 +71,8 @@ fn main() {
                         sendNox: (to, amount) => window.__TAURI__.invoke('wallet_send_nox', { to, amount: String(amount) }),
                         getTransactions: () => window.__TAURI__.invoke('wallet_get_transactions'),
                         exists: () => window.__TAURI__.invoke('wallet_check_exists'),
+                        getStealthAddress: () => window.__TAURI__.invoke('wallet_get_stealth_address'),
+                        changePassword: (oldPassword, newPassword) => window.__TAURI__.invoke('wallet_change_password', { oldPassword, newPassword }),
                     },
                     staking: {
                         getStatus: () => window.__TAURI__.invoke('staking_get_status'),
@@ -77,6 +80,22 @@ fn main() {
                         unstake: (amount) => window.__TAURI__.invoke('staking_unstake', { amount }),
                         claimRewards: () => window.__TAURI__.invoke('staking_claim_rewards'),
                         withdraw: () => window.__TAURI__.invoke('staking_withdraw'),
+                    },
+                    lpStaking: {
+                        getStatus: () => window.__TAURI__.invoke('lp_get_status'),
+                        getTiers: () => window.__TAURI__.invoke('lp_get_tiers'),
+                        lock: (amount, tier) => window.__TAURI__.invoke('lp_lock', { amount, tier }),
+                        unlock: (lockId) => window.__TAURI__.invoke('lp_unlock', { lockId }),
+                        earlyUnlock: (lockId) => window.__TAURI__.invoke('lp_early_unlock', { lockId }),
+                        extendLock: (lockId, newTier) => window.__TAURI__.invoke('lp_extend_lock', { lockId, newTier }),
+                        claimRewards: (lockId) => window.__TAURI__.invoke('lp_claim_rewards', { lockId }),
+                        claimAllRewards: () => window.__TAURI__.invoke('lp_claim_all_rewards'),
+                        compoundRewards: (lockId) => window.__TAURI__.invoke('lp_compound_rewards', { lockId }),
+                    },
+                    work: {
+                        getMetrics: () => window.__TAURI__.invoke('work_get_metrics'),
+                        getDashboard: () => window.__TAURI__.invoke('work_get_dashboard'),
+                        getEpoch: () => window.__TAURI__.invoke('work_get_epoch'),
                     },
                     node: {
                         getStatus: () => window.__TAURI__.invoke('node_get_status'),
@@ -138,11 +157,25 @@ fn main() {
             wallet::wallet_send_nox,
             wallet::wallet_get_transactions,
             wallet::wallet_check_exists,
+            wallet::wallet_get_stealth_address,
+            wallet::wallet_change_password,
             staking::staking_get_status,
             staking::staking_stake,
             staking::staking_unstake,
             staking::staking_claim_rewards,
             staking::staking_withdraw,
+            lp_staking::lp_get_status,
+            lp_staking::lp_get_tiers,
+            lp_staking::lp_lock,
+            lp_staking::lp_unlock,
+            lp_staking::lp_early_unlock,
+            lp_staking::lp_extend_lock,
+            lp_staking::lp_claim_rewards,
+            lp_staking::lp_claim_all_rewards,
+            lp_staking::lp_compound_rewards,
+            work_metrics::work_get_metrics,
+            work_metrics::work_get_dashboard,
+            work_metrics::work_get_epoch,
             node::node_get_status,
             node::node_start_embedded,
             node::node_stop_embedded,
