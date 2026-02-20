@@ -6,8 +6,10 @@
 	const navItems = [
 		{ path: '/', label: 'Browser', icon: 'globe' },
 		{ path: '/wallet', label: 'Wallet', icon: 'wallet' },
+		{ path: '/staking', label: 'Staking', icon: 'staking' },
 		{ path: '/network', label: 'Network', icon: 'network' },
 		{ path: '/node', label: 'Node', icon: 'server' },
+		{ path: '/privacy', label: 'Privacy', icon: 'shield' },
 		{ path: '/settings', label: 'Settings', icon: 'settings' }
 	];
 
@@ -64,6 +66,14 @@
 							<rect x="3" y="14" width="18" height="6" rx="1"/>
 							<circle cx="7" cy="7" r="1" fill="currentColor"/>
 							<circle cx="7" cy="17" r="1" fill="currentColor"/>
+						</svg>
+					{:else if item.icon === 'staking'}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+						</svg>
+					{:else if item.icon === 'shield'}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
 						</svg>
 					{:else if item.icon === 'settings'}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
