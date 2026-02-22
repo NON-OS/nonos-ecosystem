@@ -1,7 +1,11 @@
-use crate::blockchain::{send_transaction, NOX_TOKEN_ADDRESS, NOX_STAKING_ADDRESS};
+use crate::blockchain::{
+    send_transaction_sepolia, fetch_sepolia_balances,
+    NOX_TOKEN_ADDRESS_SEPOLIA, NOX_STAKING_ADDRESS_SEPOLIA,
+};
 use crate::helpers::format_wei;
 use crate::state::AppState;
 use crate::types::{StakingStatusResponse, STAKING_TIERS};
+use crate::wallet::state::WALLET_MANAGER;
 use tauri::State;
 
 fn get_staking_tier(staked_nox: u128) -> (usize, &'static str, &'static str) {
@@ -54,136 +58,160 @@ pub async fn staking_get_status(state: State<'_, AppState>) -> Result<StakingSta
 
 #[tauri::command]
 pub async fn staking_stake(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     amount: String,
 ) -> Result<String, String> {
-    if NOX_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("Staking contract not yet deployed to mainnet. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
+    let address = wallet.address().to_hex();
+    drop(manager);
 
     let amount_nox: f64 = amount.parse()
         .map_err(|_| "Invalid amount")?;
     let amount_wei = (amount_nox * 1e18) as u128;
 
-    if amount_wei > wallet.nox_balance {
-        return Err("Insufficient NOX balance".into());
+    let (_, sepolia_nox) = fetch_sepolia_balances(&address).await;
+    if amount_wei > sepolia_nox {
+        return Err(format!(
+            "Insufficient Sepolia NOX balance. Have {} NOX, staking {} NOX",
+            sepolia_nox as f64 / 1e18,
+            amount_nox
+        ));
     }
-
-    drop(wallet);
 
     let approve_data = format!(
         "0x095ea7b3{:0>64}{:0>64}",
-        NOX_STAKING_ADDRESS.trim_start_matches("0x"),
+        NOX_STAKING_ADDRESS_SEPOLIA.trim_start_matches("0x"),
         format!("{:x}", amount_wei)
     );
     let approve_data_bytes = hex::decode(approve_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let _approve_tx = send_transaction(&private_key, NOX_TOKEN_ADDRESS, 0, approve_data_bytes).await?;
+    let _approve_tx = send_transaction_sepolia(
+        &private_key,
+        NOX_TOKEN_ADDRESS_SEPOLIA,
+        0,
+        approve_data_bytes,
+        100000
+    ).await?;
 
     let stake_data = format!("0xa694fc3a{:0>64}", format!("{:x}", amount_wei));
     let stake_data_bytes = hex::decode(stake_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let stake_tx = send_transaction(&private_key, NOX_STAKING_ADDRESS, 0, stake_data_bytes).await?;
+    let stake_tx = send_transaction_sepolia(
+        &private_key,
+        NOX_STAKING_ADDRESS_SEPOLIA,
+        0,
+        stake_data_bytes,
+        150000
+    ).await?;
 
-    Ok(format!("Staked {} NOX! Tx: {}", amount_nox, stake_tx))
+    Ok(format!("Staked {} NOX on Sepolia! Tx: {}", amount_nox, stake_tx))
 }
 
 #[tauri::command]
 pub async fn staking_unstake(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     amount: String,
 ) -> Result<String, String> {
-    if NOX_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("Staking contract not yet deployed to mainnet. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
+    drop(manager);
 
     let amount_nox: f64 = amount.parse()
         .map_err(|_| "Invalid amount")?;
     let amount_wei = (amount_nox * 1e18) as u128;
 
-    drop(wallet);
-
     let unstake_data = format!("0x2e17de78{:0>64}", format!("{:x}", amount_wei));
     let unstake_data_bytes = hex::decode(unstake_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let unstake_tx = send_transaction(&private_key, NOX_STAKING_ADDRESS, 0, unstake_data_bytes).await?;
+    let unstake_tx = send_transaction_sepolia(
+        &private_key,
+        NOX_STAKING_ADDRESS_SEPOLIA,
+        0,
+        unstake_data_bytes,
+        150000
+    ).await?;
 
     Ok(format!("Unstake initiated for {} NOX (14-day unbonding period). Tx: {}", amount_nox, unstake_tx))
 }
 
 #[tauri::command]
 pub async fn staking_claim_rewards(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
 ) -> Result<String, String> {
-    if NOX_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("Staking contract not yet deployed to mainnet. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let claim_data = "0x372500ab";
     let claim_data_bytes = hex::decode(claim_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let claim_tx = send_transaction(&private_key, NOX_STAKING_ADDRESS, 0, claim_data_bytes).await?;
+    let claim_tx = send_transaction_sepolia(
+        &private_key,
+        NOX_STAKING_ADDRESS_SEPOLIA,
+        0,
+        claim_data_bytes,
+        150000
+    ).await?;
 
-    Ok(format!("Rewards claimed! Tx: {}", claim_tx))
+    Ok(format!("Rewards claimed on Sepolia! Tx: {}", claim_tx))
 }
 
 #[tauri::command]
 pub async fn staking_withdraw(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
 ) -> Result<String, String> {
-    if NOX_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("Staking contract not yet deployed to mainnet. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let withdraw_data = "0x3ccfd60b";
     let withdraw_data_bytes = hex::decode(withdraw_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let withdraw_tx = send_transaction(&private_key, NOX_STAKING_ADDRESS, 0, withdraw_data_bytes).await?;
+    let withdraw_tx = send_transaction_sepolia(
+        &private_key,
+        NOX_STAKING_ADDRESS_SEPOLIA,
+        0,
+        withdraw_data_bytes,
+        150000
+    ).await?;
 
-    Ok(format!("Withdrawal complete! Tx: {}", withdraw_tx))
+    Ok(format!("Withdrawal complete on Sepolia! Tx: {}", withdraw_tx))
 }
