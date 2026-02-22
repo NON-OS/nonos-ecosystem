@@ -114,7 +114,7 @@
 
 	<div class="sidebar-footer">
 		<div class="footer-row">
-			<span class="version">v1.0.0</span>
+			<span class="version">v1.0.5</span>
 			<a href="https://nonos.systems" target="_blank" rel="noopener" class="footer-link">
 				nonos.systems
 			</a>
