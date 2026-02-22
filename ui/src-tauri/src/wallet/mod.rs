@@ -1,4 +1,4 @@
 mod commands;
-mod state;
+pub mod state;
 
 pub use commands::*;
