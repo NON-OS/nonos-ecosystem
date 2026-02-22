@@ -159,8 +159,11 @@
 
 <div class="staking-page">
 	<div class="page-header">
-		<h1>Privacy Infrastructure Economy</h1>
-		<p class="subtitle">Stake NOX, provide liquidity, and earn rewards for privacy work</p>
+		<div class="header-row">
+			<h1>Privacy Infrastructure Economy</h1>
+			<span class="network-badge sepolia">Sepolia Testnet</span>
+		</div>
+		<p class="subtitle">Stake NOX, provide liquidity, and earn rewards for privacy work. All staking operations run on Sepolia testnet.</p>
 	</div>
 
 	{#if error}
@@ -231,10 +234,32 @@
 		margin-bottom: var(--nox-space-xl);
 	}
 
+	.header-row {
+		display: flex;
+		align-items: center;
+		gap: var(--nox-space-md);
+		margin-bottom: var(--nox-space-xs);
+	}
+
 	.page-header h1 {
 		font-size: var(--nox-text-2xl);
 		font-weight: var(--nox-font-semibold);
-		margin-bottom: var(--nox-space-xs);
+	}
+
+	.network-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 4px 10px;
+		border-radius: var(--nox-radius-sm);
+		font-size: var(--nox-text-xs);
+		font-weight: var(--nox-font-semibold);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.network-badge.sepolia {
+		background: rgba(245, 158, 11, 0.15);
+		color: #f59e0b;
 	}
 
 	.subtitle {
