@@ -53,7 +53,7 @@ fn main() {
                 .eval(
                     r#"
                 window.nonos = {
-                    version: '1.0.0',
+                    version: '1.0.5',
                     network: {
                         connect: () => window.__TAURI__.invoke('network_connect'),
                         disconnect: () => window.__TAURI__.invoke('network_disconnect'),
@@ -73,6 +73,8 @@ fn main() {
                         exists: () => window.__TAURI__.invoke('wallet_check_exists'),
                         getStealthAddress: () => window.__TAURI__.invoke('wallet_get_stealth_address'),
                         changePassword: (oldPassword, newPassword) => window.__TAURI__.invoke('wallet_change_password', { oldPassword, newPassword }),
+                        getSelectedNetwork: () => window.__TAURI__.invoke('get_selected_network'),
+                        setSelectedNetwork: (network) => window.__TAURI__.invoke('set_selected_network', { network }),
                     },
                     staking: {
                         getStatus: () => window.__TAURI__.invoke('staking_get_status'),
@@ -84,7 +86,7 @@ fn main() {
                     lpStaking: {
                         getStatus: () => window.__TAURI__.invoke('lp_get_status'),
                         getTiers: () => window.__TAURI__.invoke('lp_get_tiers'),
-                        lock: (amount, tier) => window.__TAURI__.invoke('lp_lock', { amount, tier }),
+                        lock: (amount, tier) => window.__TAURI__.invoke('lp_lock', { amount: String(amount), tier }),
                         unlock: (lockId) => window.__TAURI__.invoke('lp_unlock', { lockId }),
                         earlyUnlock: (lockId) => window.__TAURI__.invoke('lp_early_unlock', { lockId }),
                         extendLock: (lockId, newTier) => window.__TAURI__.invoke('lp_extend_lock', { lockId, newTier }),
@@ -159,6 +161,8 @@ fn main() {
             wallet::wallet_check_exists,
             wallet::wallet_get_stealth_address,
             wallet::wallet_change_password,
+            wallet::get_selected_network,
+            wallet::set_selected_network,
             staking::staking_get_status,
             staking::staking_stake,
             staking::staking_unstake,
