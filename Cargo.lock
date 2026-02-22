@@ -4984,7 +4984,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-anyone"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5004,7 +5004,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-app"
-version = "1.0.3"
+version = "1.0.5"
 dependencies = [
  "bip39",
  "dirs",
@@ -5036,7 +5036,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-browser"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5059,7 +5059,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-crypto"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -5099,7 +5099,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-daemon"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5161,7 +5161,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-dash"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5180,7 +5180,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-types"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "blake3",
  "chrono",
@@ -5193,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "nonos-wallet"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "chrono",
