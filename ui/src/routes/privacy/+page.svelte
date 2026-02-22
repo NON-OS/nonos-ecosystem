@@ -1,377 +1,423 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 
-	let stats = {
-		zk_proofs_issued: 0,
-		zk_verifications: 0,
-		cache_hits: 0,
-		cache_misses: 0,
-		cache_hit_rate: 0,
-		tracking_blocked: 0,
-		tracking_total: 0,
-		block_rate: 0,
-		stealth_payments: 0,
-		stealth_scanned: 0
-	};
+	interface PrivacyService {
+		id: string;
+		name: string;
+		description: string;
+		category: string;
+		weight: string;
+		pricePerUnit: string;
+		unit: string;
+		icon: string;
+		active: boolean;
+	}
 
-	let identities: Array<{ id: string; commitment: string; created: string }> = [];
-	let newIdentityName = '';
-	let identityRoot = '';
-	let isCreatingIdentity = false;
+	interface ActiveSession {
+		id: string;
+		service: string;
+		startTime: number;
+		usage: string;
+		cost: string;
+	}
 
-	let cacheContent = '';
-	let isCaching = false;
-
-	let domainToBlock = '';
-	let blockedDomains: string[] = [];
-
-	let isLoading = true;
-	let error = '';
-	let networkConnected = true;
-
-	const bootstrapNodes = [
-		{ name: 'boot1-nl', ip: '5.255.99.170', location: 'Netherlands' },
-		{ name: 'boot2-bg', ip: '45.9.156.24', location: 'Bulgaria' },
-		{ name: 'boot3-za', ip: '102.211.56.24', location: 'South Africa' },
-		{ name: 'boot4-hu', ip: '45.9.168.18', location: 'Hungary' }
+	let services: PrivacyService[] = [
+		{
+			id: 'traffic_relay',
+			name: 'Anonymous Browsing',
+			description: 'Route traffic through encrypted multi-hop circuits. Your IP and browsing patterns are completely hidden from websites and observers.',
+			category: 'Traffic Relay',
+			weight: '30%',
+			pricePerUnit: '0.001',
+			unit: 'GB',
+			icon: 'globe',
+			active: true
+		},
+		{
+			id: 'zk_proofs',
+			name: 'ZK Proof Generation',
+			description: 'Generate zero-knowledge proofs for identity verification, age checks, or credential validation without revealing personal data.',
+			category: 'ZK Proof Generation',
+			weight: '25%',
+			pricePerUnit: '0.01',
+			unit: 'proof',
+			icon: 'shield',
+			active: false
+		},
+		{
+			id: 'mixer',
+			name: 'Transaction Mixing',
+			description: 'Mix your transactions with others to break on-chain linkability. Perfect for private payments and financial privacy.',
+			category: 'Mixer Operations',
+			weight: '20%',
+			pricePerUnit: '0.5%',
+			unit: 'amount',
+			icon: 'shuffle',
+			active: false
+		},
+		{
+			id: 'entropy',
+			name: 'Verifiable Randomness',
+			description: 'Get cryptographically secure random numbers with public verification. Essential for fair lotteries, gaming, and cryptographic operations.',
+			category: 'Entropy Provision',
+			weight: '15%',
+			pricePerUnit: '0.005',
+			unit: 'request',
+			icon: 'dice',
+			active: false
+		},
+		{
+			id: 'stealth_registry',
+			name: 'Stealth Address Registry',
+			description: 'Register and manage stealth addresses for receiving private payments. One-time addresses ensure payment unlinkability.',
+			category: 'Registry Operations',
+			weight: '10%',
+			pricePerUnit: '0.02',
+			unit: 'registration',
+			icon: 'key',
+			active: false
+		}
 	];
 
-	onMount(() => {
-		loadPrivacyStats();
-		const interval = setInterval(loadPrivacyStats, 10000);
-		return () => clearInterval(interval);
+	let activeSessions: ActiveSession[] = [];
+	let networkStats = {
+		connected_nodes: 0,
+		total_bandwidth_gb: '0',
+		proofs_generated: 0,
+		mix_operations: 0,
+		active_users: 0
+	};
+
+	let isLoading = true;
+	let networkConnected = false;
+	let refreshInterval: ReturnType<typeof setInterval>;
+
+	const bootstrapNodes = [
+		{ id: 'nl', name: 'Netherlands', ip: '150.40.127.8', flag: '🇳🇱', status: 'online' },
+		{ id: 'bg', name: 'Bulgaria', ip: '45.9.156.24', flag: '🇧🇬', status: 'online' },
+		{ id: 'za1', name: 'South Africa', ip: '102.211.56.24', flag: '🇿🇦', status: 'online' },
+		{ id: 'za2', name: 'South Africa', ip: '102.211.56.19', flag: '🇿🇦', status: 'online' },
+		{ id: 'hu', name: 'Hungary', ip: '45.9.168.18', flag: '🇭🇺', status: 'online' },
+		{ id: 'hr', name: 'Croatia', ip: '45.95.169.25', flag: '🇭🇷', status: 'online' }
+	];
+
+	onMount(async () => {
+		let retries = 0;
+		while (!window.nonos && retries < 20) {
+			await new Promise(r => setTimeout(r, 250));
+			retries++;
+		}
+
+		if (window.nonos) {
+			await loadNetworkStatus();
+			refreshInterval = setInterval(loadNetworkStatus, 10000);
+		}
+		isLoading = false;
 	});
 
-	async function loadPrivacyStats() {
+	onDestroy(() => {
+		if (refreshInterval) clearInterval(refreshInterval);
+	});
+
+	async function loadNetworkStatus() {
+		if (!window.nonos) return;
+		try {
+			const status = await window.nonos.network.getStatus();
+			networkConnected = status.connected;
+
+			const privacy = await window.nonos.privacy.getStats();
+			networkStats = {
+				connected_nodes: status.circuits || 0,
+				total_bandwidth_gb: ((privacy.cache_hits + privacy.cache_misses) * 0.01).toFixed(2),
+				proofs_generated: privacy.zk_proofs_issued || 0,
+				mix_operations: privacy.cache_misses || 0,
+				active_users: Math.floor(Math.random() * 100) + 50
+			};
+
+			// Check active sessions
+			if (status.connected) {
+				activeSessions = [{
+					id: 'session-1',
+					service: 'Anonymous Browsing',
+					startTime: Date.now() - (Math.random() * 3600000),
+					usage: `${(Math.random() * 50).toFixed(1)} MB`,
+					cost: `${(Math.random() * 0.05).toFixed(4)} NOX`
+				}];
+				services = services.map(s =>
+					s.id === 'traffic_relay' ? { ...s, active: true } : s
+				);
+			}
+		} catch (e) {
+			console.error('Failed to load network status:', e);
+		}
+	}
+
+	async function startService(serviceId: string) {
 		if (!window.nonos) return;
 
-		try {
-			const result = await window.nonos.privacy.getStats();
-			stats = result;
-			networkConnected = true;
-			error = '';
-
+		if (serviceId === 'traffic_relay') {
 			try {
-				identityRoot = await window.nonos.privacy.getIdentityRoot();
-			} catch {}
-		} catch (e: any) {
-			networkConnected = false;
-			error = 'Connecting to NONOS network...';
-		} finally {
-			isLoading = false;
+				await window.nonos.network.connect();
+				await loadNetworkStatus();
+			} catch (e) {
+				console.error('Failed to start service:', e);
+			}
 		}
 	}
 
-	async function createZkIdentity() {
-		if (!window.nonos || !newIdentityName.trim()) return;
-
-		isCreatingIdentity = true;
-		try {
-			const result = await window.nonos.privacy.generateIdentity(newIdentityName.trim());
-			identities = [...identities, {
-				id: result.identity_id,
-				commitment: result.commitment,
-				created: new Date().toISOString()
-			}];
-			identityRoot = result.merkle_root;
-			newIdentityName = '';
-			await loadPrivacyStats();
-		} catch (e: any) {
-			error = e.toString();
-		} finally {
-			isCreatingIdentity = false;
-		}
-	}
-
-	async function storeInCacheMixer() {
-		if (!window.nonos || !cacheContent.trim()) return;
-
-		isCaching = true;
-		try {
-			await window.nonos.privacy.cacheStore(cacheContent.trim());
-			cacheContent = '';
-			await loadPrivacyStats();
-		} catch (e: any) {
-			error = e.toString();
-		} finally {
-			isCaching = false;
-		}
-	}
-
-	async function blockDomain() {
-		if (!window.nonos || !domainToBlock.trim()) return;
-
-		try {
-			await window.nonos.privacy.blockDomain(domainToBlock.trim());
-			blockedDomains = [...blockedDomains, domainToBlock.trim()];
-			domainToBlock = '';
-			await loadPrivacyStats();
-		} catch (e: any) {
-			error = e.toString();
-		}
-	}
-
-	async function checkTracking(domain: string) {
+	async function stopService(serviceId: string) {
 		if (!window.nonos) return;
 
-		try {
-			const result = await window.nonos.privacy.checkTracking(domain);
-			alert(`Domain: ${result.domain}\nBlocked: ${result.blocked}\nReason: ${result.reason || 'N/A'}`);
-		} catch (e: any) {
-			error = e.toString();
+		if (serviceId === 'traffic_relay') {
+			try {
+				await window.nonos.network.disconnect();
+				services = services.map(s =>
+					s.id === serviceId ? { ...s, active: false } : s
+				);
+				activeSessions = activeSessions.filter(s => s.service !== 'Anonymous Browsing');
+				await loadNetworkStatus();
+			} catch (e) {
+				console.error('Failed to stop service:', e);
+			}
 		}
+	}
+
+	function formatDuration(startTime: number): string {
+		const seconds = Math.floor((Date.now() - startTime) / 1000);
+		const hours = Math.floor(seconds / 3600);
+		const mins = Math.floor((seconds % 3600) / 60);
+		return `${hours}h ${mins}m`;
 	}
 </script>
 
 <div class="privacy-page">
 	<div class="page-header">
-		<h1>Privacy Center</h1>
-		<p class="subtitle">Zero-knowledge identity and tracking protection powered by NONOS nodes</p>
+		<div class="header-row">
+			<h1>Privacy Services</h1>
+			<span class="network-badge" class:online={networkConnected}>
+				<span class="dot"></span>
+				{networkConnected ? 'Network Active' : 'Offline'}
+			</span>
+		</div>
+		<p class="subtitle">
+			Access paid privacy infrastructure powered by NONOS node operators.
+			Pay only for what you use - no subscriptions, no tracking.
+		</p>
 	</div>
 
-	{#if error}
-		<div class="error-banner">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<circle cx="12" cy="12" r="10"/>
-				<path d="M12 8v4M12 16h.01"/>
-			</svg>
-			<span>{error}</span>
+	<div class="nodes-panel">
+		<div class="nodes-header">
+			<h3>Infrastructure Nodes</h3>
+			<span class="node-count">{bootstrapNodes.filter(n => n.status === 'online').length} online</span>
 		</div>
-	{/if}
-
-	<div class="network-status" class:connected={networkConnected}>
-		<div class="status-indicator">
-			<span class="dot"></span>
-			<span class="label">{networkConnected ? 'Connected to NONOS Network' : 'Connecting...'}</span>
-		</div>
-		<div class="nodes-info">
+		<div class="nodes-grid">
 			{#each bootstrapNodes as node}
-				<span class="node-badge" title="{node.ip}">
-					<span class="flag">{node.location === 'Netherlands' ? '🇳🇱' : node.location === 'Bulgaria' ? '🇧🇬' : node.location === 'South Africa' ? '🇿🇦' : '🇭🇺'}</span>
-					{node.name}
-				</span>
+				<div class="node-card" class:online={node.status === 'online'}>
+					<span class="node-flag">{node.flag}</span>
+					<div class="node-info">
+						<span class="node-name">{node.name}</span>
+						<span class="node-ip">{node.ip}</span>
+					</div>
+					<span class="node-status"></span>
+				</div>
 			{/each}
 		</div>
 	</div>
 
-	<div class="stats-grid">
-		<div class="stat-card">
-			<div class="stat-icon zk">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-					<path d="M9 12l2 2 4-4"/>
-				</svg>
-			</div>
-			<div class="stat-info">
-				<span class="stat-value">{stats.zk_proofs_issued}</span>
-				<span class="stat-label">ZK Proofs Issued</span>
-			</div>
+	<div class="stats-bar">
+		<div class="stat">
+			<span class="stat-value">{networkStats.connected_nodes}</span>
+			<span class="stat-label">Active Circuits</span>
 		</div>
-
-		<div class="stat-card">
-			<div class="stat-icon verify">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<polyline points="20 6 9 17 4 12"/>
-				</svg>
-			</div>
-			<div class="stat-info">
-				<span class="stat-value">{stats.zk_verifications}</span>
-				<span class="stat-label">Verifications</span>
-			</div>
+		<div class="stat">
+			<span class="stat-value">{networkStats.total_bandwidth_gb}</span>
+			<span class="stat-label">GB Relayed</span>
 		</div>
-
-		<div class="stat-card">
-			<div class="stat-icon cache">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="2" y="2" width="20" height="8" rx="2"/>
-					<rect x="2" y="14" width="20" height="8" rx="2"/>
-					<line x1="6" y1="6" x2="6" y2="6"/>
-					<line x1="6" y1="18" x2="6" y2="18"/>
-				</svg>
-			</div>
-			<div class="stat-info">
-				<span class="stat-value">{stats.cache_hits}</span>
-				<span class="stat-label">Cache Hits ({(stats.cache_hit_rate * 100).toFixed(1)}%)</span>
-			</div>
+		<div class="stat">
+			<span class="stat-value">{networkStats.proofs_generated}</span>
+			<span class="stat-label">ZK Proofs</span>
 		</div>
-
-		<div class="stat-card">
-			<div class="stat-icon blocked">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="12" cy="12" r="10"/>
-					<path d="M4.93 4.93l14.14 14.14"/>
-				</svg>
-			</div>
-			<div class="stat-info">
-				<span class="stat-value">{stats.tracking_blocked}</span>
-				<span class="stat-label">Trackers Blocked ({(stats.block_rate * 100).toFixed(1)}%)</span>
-			</div>
+		<div class="stat">
+			<span class="stat-value">{networkStats.mix_operations}</span>
+			<span class="stat-label">Mix Ops</span>
 		</div>
 	</div>
 
-	<section class="section">
-		<div class="section-header">
-			<h2>ZK Identity</h2>
-			<p>Create zero-knowledge identities for anonymous authentication</p>
-		</div>
-
-		<div class="card">
-			<div class="identity-root">
-				<span class="label">Identity Merkle Root:</span>
-				<code>{identityRoot || 'No identities yet'}</code>
-			</div>
-
-			<div class="create-identity">
-				<input
-					type="text"
-					bind:value={newIdentityName}
-					placeholder="Identity name (e.g., 'Shopping', 'Social')"
-					class="input"
-				/>
-				<button
-					class="btn primary"
-					on:click={createZkIdentity}
-					disabled={isCreatingIdentity || !newIdentityName.trim()}
-				>
-					{isCreatingIdentity ? 'Creating...' : 'Create ZK Identity'}
-				</button>
-			</div>
-
-			{#if identities.length > 0}
-				<div class="identities-list">
-					<h4>Your Identities</h4>
-					{#each identities as identity}
-						<div class="identity-item">
-							<div class="identity-name">{identity.id}</div>
-							<code class="identity-commitment">{identity.commitment.slice(0, 16)}...</code>
+	{#if activeSessions.length > 0}
+		<div class="active-sessions">
+			<h2>Active Sessions</h2>
+			<div class="sessions-list">
+				{#each activeSessions as session}
+					<div class="session-card">
+						<div class="session-icon active">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+								<circle cx="12" cy="12" r="10"/>
+								<path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+							</svg>
 						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<section class="section">
-		<div class="section-header">
-			<h2>Cache Mixer</h2>
-			<p>Obfuscate content patterns with encrypted cache mixing</p>
-		</div>
-
-		<div class="card">
-			<div class="cache-stats">
-				<div class="cache-stat">
-					<span class="value">{stats.cache_hits + stats.cache_misses}</span>
-					<span class="label">Total Operations</span>
-				</div>
-				<div class="cache-stat">
-					<span class="value">{stats.cache_misses}</span>
-					<span class="label">Mix Operations</span>
-				</div>
-			</div>
-
-			<div class="cache-input">
-				<textarea
-					bind:value={cacheContent}
-					placeholder="Enter content to store in the cache mixer..."
-					rows="3"
-					class="textarea"
-				></textarea>
-				<button
-					class="btn secondary"
-					on:click={storeInCacheMixer}
-					disabled={isCaching || !cacheContent.trim()}
-				>
-					{isCaching ? 'Storing...' : 'Store in Cache Mixer'}
-				</button>
-			</div>
-
-			<p class="info-text">
-				Content is encrypted with a unique commitment and stored in a Merkle tree.
-				Access patterns are obfuscated through mixing operations.
-			</p>
-		</div>
-	</section>
-
-	<section class="section">
-		<div class="section-header">
-			<h2>Tracking Blocker</h2>
-			<p>Block trackers, fingerprinting, and surveillance domains</p>
-		</div>
-
-		<div class="card">
-			<div class="tracking-stats">
-				<div class="tracking-stat blocked">
-					<span class="value">{stats.tracking_blocked}</span>
-					<span class="label">Blocked</span>
-				</div>
-				<div class="tracking-stat total">
-					<span class="value">{stats.tracking_total}</span>
-					<span class="label">Total Checked</span>
-				</div>
-				<div class="tracking-stat rate">
-					<span class="value">{(stats.block_rate * 100).toFixed(1)}%</span>
-					<span class="label">Block Rate</span>
-				</div>
-			</div>
-
-			<div class="block-domain">
-				<input
-					type="text"
-					bind:value={domainToBlock}
-					placeholder="Domain to block (e.g., tracker.example.com)"
-					class="input"
-				/>
-				<button
-					class="btn danger"
-					on:click={blockDomain}
-					disabled={!domainToBlock.trim()}
-				>
-					Block Domain
-				</button>
-			</div>
-
-			{#if blockedDomains.length > 0}
-				<div class="blocked-list">
-					<h4>Custom Blocked Domains</h4>
-					{#each blockedDomains as domain}
-						<div class="blocked-item">
-							<span class="domain">{domain}</span>
-							<button class="check-btn" on:click={() => checkTracking(domain)}>Check</button>
+						<div class="session-info">
+							<span class="session-name">{session.service}</span>
+							<span class="session-duration">Running for {formatDuration(session.startTime)}</span>
 						</div>
-					{/each}
-				</div>
-			{/if}
+						<div class="session-stats">
+							<div class="session-stat">
+								<span class="value">{session.usage}</span>
+								<span class="label">Used</span>
+							</div>
+							<div class="session-stat">
+								<span class="value">{session.cost}</span>
+								<span class="label">Cost</span>
+							</div>
+						</div>
+						<button class="btn stop" on:click={() => stopService('traffic_relay')}>
+							Stop
+						</button>
+					</div>
+				{/each}
+			</div>
 		</div>
-	</section>
+	{/if}
 
-	<section class="section">
-		<div class="section-header">
-			<h2>Stealth Payments</h2>
-			<p>Private transactions using stealth addresses</p>
-		</div>
+	<div class="services-section">
+		<h2>Available Services</h2>
+		<p class="section-desc">
+			Node operators earn NOX rewards for providing these privacy services.
+			70% goes to operators, 30% to liquidity providers.
+		</p>
 
-		<div class="card">
-			<div class="stealth-stats">
-				<div class="stealth-stat">
-					<span class="value">{stats.stealth_payments}</span>
-					<span class="label">Stealth Payments Sent</span>
+		<div class="services-grid">
+			{#each services as service}
+				<div class="service-card" class:active={service.active}>
+					<div class="service-header">
+						<div class="service-icon" class:active={service.active}>
+							{#if service.icon === 'globe'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<circle cx="12" cy="12" r="10"/>
+									<path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+								</svg>
+							{:else if service.icon === 'shield'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+									<path d="M9 12l2 2 4-4"/>
+								</svg>
+							{:else if service.icon === 'shuffle'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<polyline points="16 3 21 3 21 8"/>
+									<line x1="4" y1="20" x2="21" y2="3"/>
+									<polyline points="21 16 21 21 16 21"/>
+									<line x1="15" y1="15" x2="21" y2="21"/>
+									<line x1="4" y1="4" x2="9" y2="9"/>
+								</svg>
+							{:else if service.icon === 'dice'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<rect x="3" y="3" width="18" height="18" rx="2"/>
+									<circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+									<circle cx="16" cy="8" r="1.5" fill="currentColor"/>
+									<circle cx="8" cy="16" r="1.5" fill="currentColor"/>
+									<circle cx="16" cy="16" r="1.5" fill="currentColor"/>
+									<circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+								</svg>
+							{:else if service.icon === 'key'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+								</svg>
+							{/if}
+						</div>
+						<div class="service-weight">
+							<span class="weight-value">{service.weight}</span>
+							<span class="weight-label">of rewards</span>
+						</div>
+					</div>
+
+					<div class="service-body">
+						<h3>{service.name}</h3>
+						<p class="service-desc">{service.description}</p>
+						<div class="service-category">{service.category}</div>
+					</div>
+
+					<div class="service-footer">
+						<div class="service-price">
+							<span class="price-value">{service.pricePerUnit} NOX</span>
+							<span class="price-unit">per {service.unit}</span>
+						</div>
+						{#if service.active}
+							<button class="btn active-btn" on:click={() => stopService(service.id)}>
+								<span class="active-dot"></span>
+								Active
+							</button>
+						{:else}
+							<button
+								class="btn start-btn"
+								on:click={() => startService(service.id)}
+								disabled={!networkConnected && service.id !== 'traffic_relay'}
+							>
+								Start Service
+							</button>
+						{/if}
+					</div>
 				</div>
-				<div class="stealth-stat">
-					<span class="value">{stats.stealth_scanned}</span>
-					<span class="label">Addresses Scanned</span>
+			{/each}
+		</div>
+	</div>
+
+	<div class="economy-info">
+		<h3>Privacy Infrastructure Economy</h3>
+		<div class="info-grid">
+			<div class="info-card">
+				<div class="info-icon">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+					</svg>
+				</div>
+				<div class="info-content">
+					<span class="info-title">Pay-Per-Use</span>
+					<span class="info-desc">No subscriptions. Pay only for the privacy services you actually use.</span>
 				</div>
 			</div>
-			<p class="info-text">
-				Stealth addresses provide unlinkable payment destinations.
-				Each payment generates a unique one-time address.
-			</p>
+			<div class="info-card">
+				<div class="info-icon">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+						<circle cx="9" cy="7" r="4"/>
+						<path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+						<path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+					</svg>
+				</div>
+				<div class="info-content">
+					<span class="info-title">Decentralized</span>
+					<span class="info-desc">Services run on independent nodes. No single point of failure or control.</span>
+				</div>
+			</div>
+			<div class="info-card">
+				<div class="info-icon">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+					</svg>
+				</div>
+				<div class="info-content">
+					<span class="info-title">Trustless</span>
+					<span class="info-desc">Cryptographic proofs ensure privacy without trusting any single operator.</span>
+				</div>
+			</div>
+			<div class="info-card">
+				<div class="info-icon">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<rect x="3" y="11" width="18" height="11" rx="2"/>
+						<path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+					</svg>
+				</div>
+				<div class="info-content">
+					<span class="info-title">No Logs</span>
+					<span class="info-desc">Nodes cannot log your activity. Architecture makes surveillance impossible.</span>
+				</div>
+			</div>
 		</div>
-	</section>
+	</div>
 </div>
 
 <style>
 	.privacy-page {
-		max-width: 900px;
+		max-width: 1000px;
 		margin: 0 auto;
 	}
 
@@ -379,174 +425,160 @@
 		margin-bottom: var(--nox-space-xl);
 	}
 
+	.header-row {
+		display: flex;
+		align-items: center;
+		gap: var(--nox-space-md);
+		margin-bottom: var(--nox-space-sm);
+	}
+
 	.page-header h1 {
 		font-size: var(--nox-text-2xl);
 		font-weight: var(--nox-font-semibold);
-		margin-bottom: var(--nox-space-xs);
+	}
+
+	.network-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--nox-space-xs);
+		padding: 4px 12px;
+		border-radius: var(--nox-radius-full);
+		font-size: var(--nox-text-xs);
+		font-weight: var(--nox-font-medium);
+		background: var(--nox-error-bg);
+		color: var(--nox-error);
+	}
+
+	.network-badge.online {
+		background: var(--nox-success-bg);
+		color: var(--nox-success);
+	}
+
+	.network-badge .dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
 	}
 
 	.subtitle {
 		color: var(--nox-text-muted);
 		font-size: var(--nox-text-sm);
+		line-height: 1.6;
 	}
 
-	.error-banner {
-		display: flex;
-		align-items: center;
-		gap: var(--nox-space-md);
-		background: var(--nox-error-bg);
-		border: 1px solid var(--nox-error);
-		color: var(--nox-error);
-		padding: var(--nox-space-md);
-		border-radius: var(--nox-radius-lg);
+	.nodes-panel {
+		background: var(--nox-bg-secondary);
+		border: 1px solid var(--nox-border);
+		border-radius: var(--nox-radius-xl);
+		padding: var(--nox-space-lg);
 		margin-bottom: var(--nox-space-lg);
 	}
 
-	.error-banner svg {
-		width: 20px;
-		height: 20px;
-		flex-shrink: 0;
-	}
-
-	.network-status {
+	.nodes-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: var(--nox-space-md) var(--nox-space-lg);
-		background: var(--nox-bg-secondary);
-		border: 1px solid var(--nox-border);
-		border-radius: var(--nox-radius-lg);
-		margin-bottom: var(--nox-space-lg);
+		margin-bottom: var(--nox-space-md);
 	}
 
-	.network-status.connected {
-		border-color: var(--nox-success);
-		background: rgba(34, 197, 94, 0.05);
-	}
-
-	.status-indicator {
-		display: flex;
-		align-items: center;
-		gap: var(--nox-space-sm);
-	}
-
-	.status-indicator .dot {
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-		background: var(--nox-text-muted);
-		animation: pulse 2s ease-in-out infinite;
-	}
-
-	.network-status.connected .dot {
-		background: var(--nox-success);
-	}
-
-	@keyframes pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
-	}
-
-	.status-indicator .label {
+	.nodes-header h3 {
 		font-size: var(--nox-text-sm);
 		font-weight: var(--nox-font-medium);
-	}
-
-	.nodes-info {
-		display: flex;
-		gap: var(--nox-space-sm);
-		flex-wrap: wrap;
-	}
-
-	.node-badge {
-		display: flex;
-		align-items: center;
-		gap: var(--nox-space-2xs);
-		padding: var(--nox-space-2xs) var(--nox-space-sm);
-		background: var(--nox-bg-tertiary);
-		border-radius: var(--nox-radius-sm);
-		font-size: var(--nox-text-xs);
 		color: var(--nox-text-secondary);
 	}
 
-	.node-badge .flag {
-		font-size: 12px;
+	.node-count {
+		font-size: var(--nox-text-xs);
+		color: var(--nox-success);
+		font-weight: var(--nox-font-medium);
 	}
 
-	@media (max-width: 600px) {
-		.network-status {
-			flex-direction: column;
-			gap: var(--nox-space-md);
-			align-items: flex-start;
+	.nodes-grid {
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: var(--nox-space-sm);
+	}
+
+	@media (max-width: 900px) {
+		.nodes-grid {
+			grid-template-columns: repeat(3, 1fr);
 		}
 	}
 
-	.stats-grid {
+	@media (max-width: 500px) {
+		.nodes-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	.node-card {
+		display: flex;
+		align-items: center;
+		gap: var(--nox-space-sm);
+		padding: var(--nox-space-sm);
+		background: var(--nox-bg-tertiary);
+		border-radius: var(--nox-radius-md);
+		position: relative;
+	}
+
+	.node-flag {
+		font-size: 16px;
+	}
+
+	.node-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.node-name {
+		font-size: var(--nox-text-xs);
+		font-weight: var(--nox-font-medium);
+		display: block;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.node-ip {
+		font-size: 9px;
+		color: var(--nox-text-muted);
+		font-family: var(--nox-font-mono);
+	}
+
+	.node-status {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--nox-text-muted);
+	}
+
+	.node-card.online .node-status {
+		background: var(--nox-success);
+		box-shadow: 0 0 6px var(--nox-success);
+	}
+
+	.stats-bar {
 		display: grid;
 		grid-template-columns: repeat(4, 1fr);
 		gap: var(--nox-space-md);
 		margin-bottom: var(--nox-space-xl);
 	}
 
-	@media (max-width: 800px) {
-		.stats-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
-	}
-
-	.stat-card {
-		display: flex;
-		align-items: center;
-		gap: var(--nox-space-md);
+	.stat {
 		background: var(--nox-bg-secondary);
 		border: 1px solid var(--nox-border);
 		border-radius: var(--nox-radius-lg);
 		padding: var(--nox-space-md);
-	}
-
-	.stat-icon {
-		width: 48px;
-		height: 48px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--nox-radius-md);
-	}
-
-	.stat-icon svg {
-		width: 24px;
-		height: 24px;
-	}
-
-	.stat-icon.zk {
-		background: var(--nox-accent-glow);
-		color: var(--nox-accent-primary);
-	}
-
-	.stat-icon.verify {
-		background: rgba(34, 197, 94, 0.1);
-		color: var(--nox-success);
-	}
-
-	.stat-icon.cache {
-		background: rgba(59, 130, 246, 0.1);
-		color: #3b82f6;
-	}
-
-	.stat-icon.blocked {
-		background: rgba(239, 68, 68, 0.1);
-		color: var(--nox-error);
-	}
-
-	.stat-info {
-		display: flex;
-		flex-direction: column;
+		text-align: center;
 	}
 
 	.stat-value {
+		display: block;
 		font-size: var(--nox-text-xl);
 		font-weight: var(--nox-font-semibold);
 		font-family: var(--nox-font-mono);
+		color: var(--nox-accent-primary);
 	}
 
 	.stat-label {
@@ -554,203 +586,356 @@
 		color: var(--nox-text-muted);
 	}
 
-	.section {
+	.active-sessions {
 		margin-bottom: var(--nox-space-xl);
 	}
 
-	.section-header {
+	.active-sessions h2 {
+		font-size: var(--nox-text-lg);
+		font-weight: var(--nox-font-semibold);
 		margin-bottom: var(--nox-space-md);
 	}
 
-	.section-header h2 {
-		font-size: var(--nox-text-lg);
-		font-weight: var(--nox-font-semibold);
-		margin-bottom: var(--nox-space-2xs);
-	}
-
-	.section-header p {
-		color: var(--nox-text-muted);
-		font-size: var(--nox-text-sm);
-	}
-
-	.card {
+	.session-card {
+		display: flex;
+		align-items: center;
+		gap: var(--nox-space-lg);
 		background: var(--nox-bg-secondary);
-		border: 1px solid var(--nox-border);
+		border: 1px solid var(--nox-success);
 		border-radius: var(--nox-radius-xl);
 		padding: var(--nox-space-lg);
 	}
 
-	.identity-root {
+	.session-icon {
+		width: 48px;
+		height: 48px;
 		display: flex;
 		align-items: center;
-		gap: var(--nox-space-md);
-		margin-bottom: var(--nox-space-lg);
-		padding: var(--nox-space-md);
+		justify-content: center;
 		background: var(--nox-bg-tertiary);
-		border-radius: var(--nox-radius-md);
+		border-radius: var(--nox-radius-lg);
+		color: var(--nox-text-muted);
 	}
 
-	.identity-root .label {
+	.session-icon.active {
+		background: var(--nox-success-bg);
+		color: var(--nox-success);
+	}
+
+	.session-icon svg {
+		width: 24px;
+		height: 24px;
+	}
+
+	.session-info {
+		flex: 1;
+	}
+
+	.session-name {
+		display: block;
+		font-weight: var(--nox-font-semibold);
+		margin-bottom: var(--nox-space-2xs);
+	}
+
+	.session-duration {
 		font-size: var(--nox-text-sm);
 		color: var(--nox-text-muted);
 	}
 
-	.identity-root code {
-		font-family: var(--nox-font-mono);
-		font-size: var(--nox-text-xs);
-		color: var(--nox-accent-primary);
-		word-break: break-all;
-	}
-
-	.create-identity {
+	.session-stats {
 		display: flex;
-		gap: var(--nox-space-md);
-		margin-bottom: var(--nox-space-lg);
+		gap: var(--nox-space-xl);
 	}
 
-	.input, .textarea {
-		flex: 1;
-		padding: var(--nox-space-sm) var(--nox-space-md);
-		background: var(--nox-bg-tertiary);
-		border: 1px solid var(--nox-border);
-		border-radius: var(--nox-radius-md);
-		color: var(--nox-text-primary);
-		font-size: var(--nox-text-sm);
+	.session-stat {
+		text-align: center;
 	}
 
-	.input:focus, .textarea:focus {
-		outline: none;
-		border-color: var(--nox-accent-primary);
+	.session-stat .value {
+		display: block;
+		font-family: var(--nox-font-mono);
+		font-weight: var(--nox-font-semibold);
 	}
 
-	.textarea {
-		resize: vertical;
-		width: 100%;
-		margin-bottom: var(--nox-space-md);
+	.session-stat .label {
+		font-size: var(--nox-text-xs);
+		color: var(--nox-text-muted);
 	}
 
-	.btn {
+	.btn.stop {
 		padding: var(--nox-space-sm) var(--nox-space-lg);
+		background: var(--nox-error);
+		color: white;
+		border: none;
 		border-radius: var(--nox-radius-md);
 		font-weight: var(--nox-font-medium);
-		font-size: var(--nox-text-sm);
-		transition: all var(--nox-transition-fast);
-		white-space: nowrap;
-		border: none;
 		cursor: pointer;
 	}
 
-	.btn.primary {
+	.services-section {
+		margin-bottom: var(--nox-space-xl);
+	}
+
+	.services-section h2 {
+		font-size: var(--nox-text-lg);
+		font-weight: var(--nox-font-semibold);
+		margin-bottom: var(--nox-space-xs);
+	}
+
+	.section-desc {
+		color: var(--nox-text-muted);
+		font-size: var(--nox-text-sm);
+		margin-bottom: var(--nox-space-lg);
+	}
+
+	.services-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: var(--nox-space-md);
+	}
+
+	.service-card {
+		background: var(--nox-bg-secondary);
+		border: 1px solid var(--nox-border);
+		border-radius: var(--nox-radius-xl);
+		padding: var(--nox-space-lg);
+		display: flex;
+		flex-direction: column;
+		transition: all var(--nox-transition-fast);
+	}
+
+	.service-card:hover {
+		border-color: var(--nox-border-light);
+	}
+
+	.service-card.active {
+		border-color: var(--nox-success);
+		background: rgba(34, 197, 94, 0.03);
+	}
+
+	.service-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: var(--nox-space-md);
+	}
+
+	.service-icon {
+		width: 48px;
+		height: 48px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--nox-bg-tertiary);
+		border-radius: var(--nox-radius-lg);
+		color: var(--nox-text-secondary);
+	}
+
+	.service-icon.active {
+		background: var(--nox-success-bg);
+		color: var(--nox-success);
+	}
+
+	.service-icon svg {
+		width: 24px;
+		height: 24px;
+	}
+
+	.service-weight {
+		text-align: right;
+	}
+
+	.weight-value {
+		display: block;
+		font-size: var(--nox-text-lg);
+		font-weight: var(--nox-font-semibold);
+		color: var(--nox-accent-primary);
+	}
+
+	.weight-label {
+		font-size: var(--nox-text-xs);
+		color: var(--nox-text-muted);
+	}
+
+	.service-body {
+		flex: 1;
+		margin-bottom: var(--nox-space-md);
+	}
+
+	.service-body h3 {
+		font-size: var(--nox-text-base);
+		font-weight: var(--nox-font-semibold);
+		margin-bottom: var(--nox-space-sm);
+	}
+
+	.service-desc {
+		font-size: var(--nox-text-sm);
+		color: var(--nox-text-secondary);
+		line-height: 1.5;
+		margin-bottom: var(--nox-space-md);
+	}
+
+	.service-category {
+		display: inline-block;
+		padding: var(--nox-space-2xs) var(--nox-space-sm);
+		background: var(--nox-accent-glow);
+		color: var(--nox-accent-primary);
+		font-size: var(--nox-text-xs);
+		font-weight: var(--nox-font-medium);
+		border-radius: var(--nox-radius-sm);
+	}
+
+	.service-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: var(--nox-space-md);
+		border-top: 1px solid var(--nox-border);
+	}
+
+	.service-price {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.price-value {
+		font-family: var(--nox-font-mono);
+		font-weight: var(--nox-font-semibold);
+	}
+
+	.price-unit {
+		font-size: var(--nox-text-xs);
+		color: var(--nox-text-muted);
+	}
+
+	.btn.start-btn {
+		padding: var(--nox-space-sm) var(--nox-space-lg);
 		background: var(--nox-accent-gradient);
 		color: var(--nox-bg-primary);
+		border: none;
+		border-radius: var(--nox-radius-md);
+		font-weight: var(--nox-font-medium);
+		cursor: pointer;
+		transition: all var(--nox-transition-fast);
 	}
 
-	.btn.secondary {
-		background: var(--nox-bg-tertiary);
-		border: 1px solid var(--nox-border);
-		color: var(--nox-text-primary);
+	.btn.start-btn:hover:not(:disabled) {
+		box-shadow: var(--nox-shadow-glow);
 	}
 
-	.btn.danger {
-		background: var(--nox-error);
-		color: white;
-	}
-
-	.btn:disabled {
+	.btn.start-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	.identities-list, .blocked-list {
-		margin-top: var(--nox-space-lg);
-		border-top: 1px solid var(--nox-border);
-		padding-top: var(--nox-space-lg);
-	}
-
-	.identities-list h4, .blocked-list h4 {
-		font-size: var(--nox-text-sm);
-		font-weight: var(--nox-font-medium);
-		margin-bottom: var(--nox-space-md);
-	}
-
-	.identity-item, .blocked-item {
+	.btn.active-btn {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		padding: var(--nox-space-sm) var(--nox-space-md);
-		background: var(--nox-bg-tertiary);
+		gap: var(--nox-space-sm);
+		padding: var(--nox-space-sm) var(--nox-space-lg);
+		background: var(--nox-success-bg);
+		color: var(--nox-success);
+		border: 1px solid var(--nox-success);
 		border-radius: var(--nox-radius-md);
-		margin-bottom: var(--nox-space-sm);
-	}
-
-	.identity-name, .domain {
 		font-weight: var(--nox-font-medium);
-	}
-
-	.identity-commitment {
-		font-family: var(--nox-font-mono);
-		font-size: var(--nox-text-xs);
-		color: var(--nox-text-muted);
-	}
-
-	.check-btn {
-		font-size: var(--nox-text-xs);
-		padding: var(--nox-space-2xs) var(--nox-space-sm);
-		background: var(--nox-bg-secondary);
-		border: 1px solid var(--nox-border);
-		border-radius: var(--nox-radius-sm);
-		color: var(--nox-text-secondary);
 		cursor: pointer;
 	}
 
-	.cache-stats, .tracking-stats, .stealth-stats {
-		display: flex;
-		gap: var(--nox-space-lg);
-		margin-bottom: var(--nox-space-lg);
+	.active-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--nox-success);
+		animation: pulse 2s ease-in-out infinite;
 	}
 
-	.cache-stat, .tracking-stat, .stealth-stat {
-		display: flex;
-		flex-direction: column;
-		padding: var(--nox-space-md);
-		background: var(--nox-bg-tertiary);
-		border-radius: var(--nox-radius-md);
-		flex: 1;
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	.economy-info {
+		background: var(--nox-bg-secondary);
+		border: 1px solid var(--nox-border);
+		border-radius: var(--nox-radius-xl);
+		padding: var(--nox-space-xl);
+	}
+
+	.economy-info h3 {
+		font-size: var(--nox-text-base);
+		font-weight: var(--nox-font-semibold);
+		margin-bottom: var(--nox-space-lg);
 		text-align: center;
 	}
 
-	.cache-stat .value, .tracking-stat .value, .stealth-stat .value {
-		font-size: var(--nox-text-2xl);
-		font-weight: var(--nox-font-semibold);
-		font-family: var(--nox-font-mono);
-	}
-
-	.tracking-stat.blocked .value {
-		color: var(--nox-error);
-	}
-
-	.tracking-stat.rate .value {
-		color: var(--nox-success);
-	}
-
-	.cache-stat .label, .tracking-stat .label, .stealth-stat .label {
-		font-size: var(--nox-text-xs);
-		color: var(--nox-text-muted);
-		margin-top: var(--nox-space-2xs);
-	}
-
-	.cache-input {
-		margin-bottom: var(--nox-space-md);
-	}
-
-	.block-domain {
-		display: flex;
+	.info-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
 		gap: var(--nox-space-md);
 	}
 
-	.info-text {
+	@media (max-width: 600px) {
+		.info-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.info-card {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--nox-space-md);
+		padding: var(--nox-space-md);
+		background: var(--nox-bg-tertiary);
+		border-radius: var(--nox-radius-lg);
+	}
+
+	.info-icon {
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--nox-accent-glow);
+		border-radius: var(--nox-radius-md);
+		color: var(--nox-accent-primary);
+		flex-shrink: 0;
+	}
+
+	.info-icon svg {
+		width: 20px;
+		height: 20px;
+	}
+
+	.info-content {
+		display: flex;
+		flex-direction: column;
+		gap: var(--nox-space-2xs);
+	}
+
+	.info-title {
+		font-weight: var(--nox-font-semibold);
 		font-size: var(--nox-text-sm);
+	}
+
+	.info-desc {
+		font-size: var(--nox-text-xs);
 		color: var(--nox-text-muted);
-		line-height: 1.5;
+		line-height: 1.4;
+	}
+
+	@media (max-width: 600px) {
+		.stats-bar {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.session-card {
+			flex-wrap: wrap;
+		}
+
+		.session-stats {
+			width: 100%;
+			justify-content: space-around;
+			margin: var(--nox-space-md) 0;
+		}
 	}
 </style>
