@@ -1,9 +1,13 @@
-use crate::blockchain::{send_transaction_with_gas, NOX_TOKEN_ADDRESS};
+use crate::blockchain::{
+    send_transaction_sepolia, fetch_sepolia_balances,
+    NOX_TOKEN_ADDRESS_SEPOLIA, PRIVACY_LIQUIDITY_POOL_SEPOLIA,
+};
 use crate::state::AppState;
+use crate::wallet::state::WALLET_MANAGER;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-pub const LP_STAKING_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+pub const LP_STAKING_ADDRESS: &str = PRIVACY_LIQUIDITY_POOL_SEPOLIA;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LockTier {
@@ -68,36 +72,39 @@ pub async fn lp_get_status(state: State<'_, AppState>) -> Result<LPStakingStatus
 
 #[tauri::command]
 pub async fn lp_lock(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     amount: String,
     tier: u8,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
-    }
-
     if tier > 4 {
         return Err("Invalid tier. Must be 0-4.".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
+
+    let address = wallet.address().to_hex();
+    drop(manager);
 
     let amount_nox: f64 = amount.parse()
         .map_err(|_| "Invalid amount")?;
     let amount_wei = (amount_nox * 1e18) as u128;
 
-    if amount_wei > wallet.nox_balance {
-        return Err("Insufficient NOX balance".into());
+    let (_, sepolia_nox) = fetch_sepolia_balances(&address).await;
+    if amount_wei > sepolia_nox {
+        return Err(format!(
+            "Insufficient Sepolia NOX balance. Have {} NOX, locking {} NOX",
+            sepolia_nox as f64 / 1e18,
+            amount_nox
+        ));
     }
-
-    drop(wallet);
 
     let approve_data = format!(
         "0x095ea7b3{:0>64}{:0>64}",
@@ -107,7 +114,7 @@ pub async fn lp_lock(
     let approve_data_bytes = hex::decode(approve_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let _ = send_transaction_with_gas(&private_key, NOX_TOKEN_ADDRESS, 0, approve_data_bytes, 100000).await?;
+    let _ = send_transaction_sepolia(&private_key, NOX_TOKEN_ADDRESS_SEPOLIA, 0, approve_data_bytes, 100000).await?;
 
     let lock_data = format!(
         "0x4a4de4a8{:0>64}{:0>64}",
@@ -117,94 +124,85 @@ pub async fn lp_lock(
     let lock_data_bytes = hex::decode(lock_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let lock_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, lock_data_bytes, 200000).await?;
+    let lock_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, lock_data_bytes, 200000).await?;
 
     let tier_info = get_lock_tiers().get(tier as usize).map(|t| t.duration_days).unwrap_or(0);
-    Ok(format!("Locked {} NOX for {} days! Tx: {}", amount_nox, tier_info, lock_tx))
+    Ok(format!("Locked {} NOX for {} days on Sepolia! Tx: {}", amount_nox, tier_info, lock_tx))
 }
 
 #[tauri::command]
 pub async fn lp_unlock(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     lock_id: u64,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let unlock_data = format!("0xa69df4b5{:0>64}", format!("{:x}", lock_id));
     let unlock_data_bytes = hex::decode(unlock_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let unlock_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, unlock_data_bytes, 150000).await?;
+    let unlock_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, unlock_data_bytes, 150000).await?;
 
-    Ok(format!("Unlocked position #{}! Tx: {}", lock_id, unlock_tx))
+    Ok(format!("Unlocked position #{} on Sepolia! Tx: {}", lock_id, unlock_tx))
 }
 
 #[tauri::command]
 pub async fn lp_early_unlock(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     lock_id: u64,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let unlock_data = format!("0x7b4d0e4c{:0>64}", format!("{:x}", lock_id));
     let unlock_data_bytes = hex::decode(unlock_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let unlock_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, unlock_data_bytes, 150000).await?;
+    let unlock_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, unlock_data_bytes, 150000).await?;
 
-    Ok(format!("Early unlock for position #{}! (Penalty applied) Tx: {}", lock_id, unlock_tx))
+    Ok(format!("Early unlock for position #{} on Sepolia! (Penalty applied) Tx: {}", lock_id, unlock_tx))
 }
 
 #[tauri::command]
 pub async fn lp_extend_lock(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     lock_id: u64,
     new_tier: u8,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
-    }
-
     if new_tier > 4 {
         return Err("Invalid tier. Must be 0-4.".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    drop(wallet);
+    drop(manager);
 
     let extend_data = format!(
         "0x9e8c708e{:0>64}{:0>64}",
@@ -214,96 +212,87 @@ pub async fn lp_extend_lock(
     let extend_data_bytes = hex::decode(extend_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let extend_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, extend_data_bytes, 150000).await?;
+    let extend_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, extend_data_bytes, 150000).await?;
 
     let tier_info = get_lock_tiers().get(new_tier as usize).map(|t| t.duration_days).unwrap_or(0);
-    Ok(format!("Extended lock #{} to {} day tier! Tx: {}", lock_id, tier_info, extend_tx))
+    Ok(format!("Extended lock #{} to {} day tier on Sepolia! Tx: {}", lock_id, tier_info, extend_tx))
 }
 
 #[tauri::command]
 pub async fn lp_claim_rewards(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     lock_id: u64,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let claim_data = format!("0x0fae75d9{:0>64}", format!("{:x}", lock_id));
     let claim_data_bytes = hex::decode(claim_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let claim_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, claim_data_bytes, 150000).await?;
+    let claim_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, claim_data_bytes, 150000).await?;
 
-    Ok(format!("Claimed rewards for lock #{}! Tx: {}", lock_id, claim_tx))
+    Ok(format!("Claimed rewards for lock #{} on Sepolia! Tx: {}", lock_id, claim_tx))
 }
 
 #[tauri::command]
 pub async fn lp_claim_all_rewards(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let claim_data = "0x4e71d92d";
     let claim_data_bytes = hex::decode(claim_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let claim_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, claim_data_bytes, 300000).await?;
+    let claim_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, claim_data_bytes, 300000).await?;
 
-    Ok(format!("Claimed all rewards! Tx: {}", claim_tx))
+    Ok(format!("Claimed all rewards on Sepolia! Tx: {}", claim_tx))
 }
 
 #[tauri::command]
 pub async fn lp_compound_rewards(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     lock_id: u64,
 ) -> Result<String, String> {
-    if LP_STAKING_ADDRESS == "0x0000000000000000000000000000000000000000" {
-        return Err("LP Staking contract not yet deployed. Coming soon!".into());
+    let manager = WALLET_MANAGER.read().await;
+    let wallet = manager.active().ok_or("Wallet not unlocked")?;
+
+    if !wallet.is_unlocked() {
+        return Err("Wallet is locked".into());
     }
 
-    let wallet = state.wallet.read().await;
+    let private_key = wallet.get_account_private_key(0)
+        .map_err(|e| format!("Failed to get signing key: {}", e))?;
 
-    if !wallet.initialized || wallet.locked {
-        return Err("Wallet locked or not initialized".into());
-    }
-
-    let private_key = wallet.private_key.clone()
-        .ok_or("Private key not available")?;
-
-    drop(wallet);
+    drop(manager);
 
     let compound_data = format!("0xf69e2046{:0>64}", format!("{:x}", lock_id));
     let compound_data_bytes = hex::decode(compound_data.trim_start_matches("0x"))
         .map_err(|e| format!("Encode error: {}", e))?;
 
-    let compound_tx = send_transaction_with_gas(&private_key, LP_STAKING_ADDRESS, 0, compound_data_bytes, 200000).await?;
+    let compound_tx = send_transaction_sepolia(&private_key, LP_STAKING_ADDRESS, 0, compound_data_bytes, 200000).await?;
 
-    Ok(format!("Compounded rewards for lock #{}! Tx: {}", lock_id, compound_tx))
+    Ok(format!("Compounded rewards for lock #{} on Sepolia! Tx: {}", lock_id, compound_tx))
 }
 
 #[tauri::command]
