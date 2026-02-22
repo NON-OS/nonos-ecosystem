@@ -1,7 +1,7 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -14,11 +14,48 @@ pub enum ConnectionStatus {
     Error,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SelectedNetwork {
+    #[default]
+    Mainnet,
+    Sepolia,
+}
+
+impl From<u8> for SelectedNetwork {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => SelectedNetwork::Sepolia,
+            _ => SelectedNetwork::Mainnet,
+        }
+    }
+}
+
+impl From<SelectedNetwork> for u8 {
+    fn from(n: SelectedNetwork) -> Self {
+        match n {
+            SelectedNetwork::Mainnet => 0,
+            SelectedNetwork::Sepolia => 1,
+        }
+    }
+}
+
 pub struct AppState {
     pub network: Arc<RwLock<NetworkState>>,
     pub wallet: Arc<RwLock<WalletState>>,
     pub nodes: Arc<RwLock<NodeState>>,
     pub browser: Arc<RwLock<BrowserState>>,
+    pub selected_network: AtomicU8, // 0 = Mainnet, 1 = Sepolia
+}
+
+impl AppState {
+    pub fn get_selected_network(&self) -> SelectedNetwork {
+        SelectedNetwork::from(self.selected_network.load(Ordering::Relaxed))
+    }
+
+    pub fn set_selected_network(&self, network: SelectedNetwork) {
+        self.selected_network.store(network.into(), Ordering::Relaxed);
+    }
 }
 
 impl Default for AppState {
@@ -28,6 +65,7 @@ impl Default for AppState {
             wallet: Arc::new(RwLock::new(WalletState::default())),
             nodes: Arc::new(RwLock::new(NodeState::default())),
             browser: Arc::new(RwLock::new(BrowserState::default())),
+            selected_network: AtomicU8::new(0), // Default to Mainnet
         }
     }
 }
@@ -71,8 +109,13 @@ pub struct WalletState {
     pub address: Option<String>,
     pub private_key: Option<String>,
     pub mnemonic: Option<String>,
+    // Mainnet balances (real NOX)
     pub nox_balance: u128,
     pub eth_balance: u128,
+    // Sepolia balances (testnet for staking)
+    pub sepolia_nox_balance: u128,
+    pub sepolia_eth_balance: u128,
+    // Staking info (on Sepolia)
     pub pending_rewards: u128,
     pub staked_amount: u128,
     pub current_epoch: u64,
