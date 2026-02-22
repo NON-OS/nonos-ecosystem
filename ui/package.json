@@ -1,6 +1,6 @@
 {
   "name": "noxone-ui",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "NOXONE Browser UI - Native Svelte frontend for privacy-first browsing",
   "author": "NON-OS <team@nonos.systems>",
   "license": "MIT",
