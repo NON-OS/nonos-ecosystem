@@ -18,7 +18,7 @@
 
 	function handleLock() {
 		if (!lockAmount) return;
-		dispatch('lock', { amount: lockAmount, tier: selectedTier });
+		dispatch('lock', { amount: String(lockAmount), tier: selectedTier });
 		lockAmount = '';
 	}
 
