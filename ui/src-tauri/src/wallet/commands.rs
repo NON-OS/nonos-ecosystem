@@ -1,6 +1,6 @@
 use crate::blockchain::{
-    fetch_real_balances, get_gas_price, send_transaction, send_transaction_with_gas,
-    NOX_TOKEN_ADDRESS,
+    fetch_mainnet_balances, fetch_sepolia_balances, fetch_real_balances,
+    get_gas_price, send_transaction, NOX_TOKEN_ADDRESS_MAINNET,
 };
 use crate::helpers::format_wei;
 use crate::state::AppState;
@@ -22,16 +22,20 @@ pub async fn wallet_get_status(state: State<'_, AppState>) -> Result<WalletStatu
 
     drop(manager);
 
-    let (eth_balance, nox_balance) = if let Some(ref addr) = address {
-        fetch_real_balances(addr).await
+    let (eth_balance, nox_balance, sepolia_eth, sepolia_nox) = if let Some(ref addr) = address {
+        let (mainnet_eth, mainnet_nox) = fetch_mainnet_balances(addr).await;
+        let (sep_eth, sep_nox) = fetch_sepolia_balances(addr).await;
+        (mainnet_eth, mainnet_nox, sep_eth, sep_nox)
     } else {
-        (0, 0)
+        (0, 0, 0, 0)
     };
 
     {
         let mut app_wallet = state.wallet.write().await;
         app_wallet.eth_balance = eth_balance;
         app_wallet.nox_balance = nox_balance;
+        app_wallet.sepolia_eth_balance = sepolia_eth;
+        app_wallet.sepolia_nox_balance = sepolia_nox;
         app_wallet.initialized = initialized;
         app_wallet.locked = locked;
         app_wallet.address = address.clone();
@@ -48,6 +52,8 @@ pub async fn wallet_get_status(state: State<'_, AppState>) -> Result<WalletStatu
         address,
         nox_balance: format_wei(nox_balance),
         eth_balance: format_wei(eth_balance),
+        sepolia_nox_balance: format_wei(sepolia_nox),
+        sepolia_eth_balance: format_wei(sepolia_eth),
         pending_rewards: format_wei(app_wallet.pending_rewards),
     })
 }
@@ -282,7 +288,14 @@ pub async fn wallet_send_nox(
     let data = hex::decode(format!("a9059cbb{}{}", padded_to, padded_amount))
         .map_err(|_| "Failed to encode transfer data")?;
 
-    send_transaction_with_gas(&private_key, NOX_TOKEN_ADDRESS, 0, data, 100000).await
+    crate::blockchain::send_transaction_on_network(
+        crate::blockchain::Network::Mainnet,
+        &private_key,
+        NOX_TOKEN_ADDRESS_MAINNET,
+        0,
+        data,
+        100000
+    ).await
 }
 
 #[tauri::command]
@@ -347,4 +360,23 @@ pub async fn wallet_change_password(
         .map_err(|_| "Wrong password".to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_selected_network(state: State<'_, AppState>) -> String {
+    match state.get_selected_network() {
+        crate::state::SelectedNetwork::Mainnet => "mainnet".to_string(),
+        crate::state::SelectedNetwork::Sepolia => "sepolia".to_string(),
+    }
+}
+
+#[tauri::command]
+pub fn set_selected_network(state: State<'_, AppState>, network: String) -> Result<String, String> {
+    let selected = match network.to_lowercase().as_str() {
+        "mainnet" => crate::state::SelectedNetwork::Mainnet,
+        "sepolia" => crate::state::SelectedNetwork::Sepolia,
+        _ => return Err("Invalid network. Use 'mainnet' or 'sepolia'.".into()),
+    };
+    state.set_selected_network(selected);
+    Ok(network.to_lowercase())
 }
