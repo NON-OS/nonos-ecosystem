@@ -24,8 +24,12 @@ pub struct WalletStatusResponse {
     pub initialized: bool,
     pub locked: bool,
     pub address: Option<String>,
+    // Mainnet balances (real NOX)
     pub nox_balance: String,
     pub eth_balance: String,
+    // Sepolia balances (testnet for staking)
+    pub sepolia_nox_balance: String,
+    pub sepolia_eth_balance: String,
     pub pending_rewards: String,
 }
 
