@@ -38,8 +38,8 @@ impl Default for NetworkConfig {
 
 impl NetworkConfig {
     pub const OFFICIAL_BOOTSTRAP_NODES: &'static [&'static str] = &[
-        // Node 1 - South Africa
-        "/ip4/102.211.56.24/tcp/9432/p2p/12D3KooWD3x5mMCRUVi5HS8A2NR6J2344wRt45ewzwq58bjKuAuu",
+        // Netherlands - Primary bootstrap node
+        "/ip4/150.40.127.8/tcp/9432/p2p/12D3KooWBjicitncMksUfrxrvuR6ZfmTHt3MrCmVxrMbpHV2YZoP",
     ];
 
     pub fn bootstrap_peers(&self) -> Vec<String> {
