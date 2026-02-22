@@ -22,7 +22,7 @@
 
 	let walletState: 'locked' | 'unlocked' | 'none' = 'none';
 	let address = '';
-	let balances = { eth: '0', nox: '0' };
+	let balances = { eth: '0', nox: '0', sepolia_eth: '0', sepolia_nox: '0' };
 	let mnemonic = '';
 	let blake3Key = '';
 	let showMnemonic = false;
@@ -32,6 +32,19 @@
 	let error = '';
 	let copied = false;
 	let successMessage = '';
+
+	// Network selection state
+	let selectedNetwork: 'mainnet' | 'sepolia' = 'mainnet';
+
+	async function switchNetwork(network: 'mainnet' | 'sepolia') {
+		if (!window.nonos) return;
+		try {
+			await window.nonos.wallet.setSelectedNetwork(network);
+			selectedNetwork = network;
+		} catch (e) {
+			console.error('Failed to switch network:', e);
+		}
+	}
 
 	// Send/Receive state
 	let showSendModal = false;
@@ -117,7 +130,9 @@
 			if (status) {
 				balances = {
 					eth: status.eth_balance || '0',
-					nox: status.nox_balance || '0'
+					nox: status.nox_balance || '0',
+					sepolia_eth: status.sepolia_eth_balance || '0',
+					sepolia_nox: status.sepolia_nox_balance || '0'
 				};
 			}
 		} catch (e) {
@@ -179,7 +194,7 @@
 		await window.nonos.wallet.lock();
 		walletState = 'locked';
 		address = '';
-		balances = { eth: '0', nox: '0' };
+		balances = { eth: '0', nox: '0', sepolia_eth: '0', sepolia_nox: '0' };
 	}
 
 	function formatAddress(addr: string): string {
@@ -537,9 +552,29 @@
 				</div>
 			</div>
 
+			<!-- Network Switcher -->
+			<div class="network-switcher">
+				<button
+					class="network-btn"
+					class:active={selectedNetwork === 'mainnet'}
+					on:click={() => switchNetwork('mainnet')}
+				>
+					<span class="network-dot mainnet"></span>
+					Mainnet
+				</button>
+				<button
+					class="network-btn"
+					class:active={selectedNetwork === 'sepolia'}
+					on:click={() => switchNetwork('sepolia')}
+				>
+					<span class="network-dot sepolia"></span>
+					Sepolia (Staking)
+				</button>
+			</div>
+
 			<div class="balance-section">
 				<div class="balance-header">
-					<span class="balance-title">Balances</span>
+					<span class="balance-title">Mainnet Balances</span>
 					<button class="refresh-btn" on:click={refreshBalances} disabled={isRefreshing} title="Refresh balances">
 						<svg class:spinning={isRefreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M23 4v6h-6M1 20v-6h6"/>
@@ -570,6 +605,41 @@
 						<div class="balance-info">
 							<div class="balance-label">NOX Token</div>
 							<div class="balance-value">{balances.nox} <span class="unit">NOX</span></div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="balance-section sepolia-section">
+				<div class="balance-header">
+					<span class="balance-title">
+						<span class="network-badge sepolia">Sepolia Testnet</span>
+						Staking Balances
+					</span>
+				</div>
+				<div class="balance-cards">
+					<div class="balance-card eth sepolia">
+						<div class="balance-icon">
+							<svg viewBox="0 0 24 24" fill="none">
+								<path d="M12 2L4 12l8 5 8-5-8-10z" fill="currentColor" opacity="0.6"/>
+								<path d="M12 22l8-10-8 5-8-5 8 10z" fill="currentColor"/>
+							</svg>
+						</div>
+						<div class="balance-info">
+							<div class="balance-label">Sepolia ETH (for gas)</div>
+							<div class="balance-value">{balances.sepolia_eth} <span class="unit">ETH</span></div>
+						</div>
+					</div>
+
+					<div class="balance-card nox sepolia">
+						<div class="balance-icon">
+							<svg viewBox="0 0 24 24" fill="none">
+								<path d="M12 2L22 12L12 22L2 12L12 2Z" fill="currentColor"/>
+							</svg>
+						</div>
+						<div class="balance-info">
+							<div class="balance-label">Sepolia NOX (for staking)</div>
+							<div class="balance-value">{balances.sepolia_nox} <span class="unit">NOX</span></div>
 						</div>
 					</div>
 				</div>
@@ -1246,6 +1316,91 @@
 
 	.balance-section {
 		margin-bottom: var(--nox-space-md);
+	}
+
+	/* Network Switcher */
+	.network-switcher {
+		display: flex;
+		gap: var(--nox-space-sm);
+		margin-bottom: var(--nox-space-lg);
+		background: var(--nox-bg-secondary);
+		border: 1px solid var(--nox-border);
+		border-radius: var(--nox-radius-lg);
+		padding: var(--nox-space-xs);
+	}
+
+	.network-btn {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--nox-space-sm);
+		padding: var(--nox-space-sm) var(--nox-space-md);
+		border-radius: var(--nox-radius-md);
+		font-size: var(--nox-text-sm);
+		font-weight: var(--nox-font-medium);
+		color: var(--nox-text-muted);
+		background: transparent;
+		transition: all var(--nox-transition-fast);
+	}
+
+	.network-btn:hover {
+		color: var(--nox-text-primary);
+		background: var(--nox-bg-hover);
+	}
+
+	.network-btn.active {
+		color: var(--nox-text-primary);
+		background: var(--nox-bg-tertiary);
+	}
+
+	.network-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+	}
+
+	.network-dot.mainnet {
+		background: var(--nox-success);
+	}
+
+	.network-dot.sepolia {
+		background: #f59e0b;
+	}
+
+	/* Network Badge */
+	.network-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 2px 8px;
+		border-radius: var(--nox-radius-sm);
+		font-size: var(--nox-text-xs);
+		font-weight: var(--nox-font-semibold);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-right: var(--nox-space-sm);
+	}
+
+	.network-badge.sepolia {
+		background: rgba(245, 158, 11, 0.15);
+		color: #f59e0b;
+	}
+
+	/* Sepolia Balance Section */
+	.sepolia-section {
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		border-radius: var(--nox-radius-xl);
+		padding: var(--nox-space-md);
+		background: rgba(245, 158, 11, 0.05);
+	}
+
+	.sepolia-section .balance-title {
+		display: flex;
+		align-items: center;
+	}
+
+	.balance-card.sepolia .balance-icon {
+		opacity: 0.8;
 	}
 
 	.balance-header {
