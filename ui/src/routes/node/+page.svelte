@@ -16,12 +16,22 @@
 	let isLoading = false;
 	let startTime = Date.now();
 
-	const tiers = [
-		{ name: 'Bronze', min: '1,000', lock: '0', apy: '5-8%' },
-		{ name: 'Silver', min: '10,000', lock: '30', apy: '8-12%' },
-		{ name: 'Gold', min: '50,000', lock: '90', apy: '12-18%' },
-		{ name: 'Platinum', min: '200,000', lock: '180', apy: '18-25%' },
-		{ name: 'Diamond', min: '1,000,000', lock: '365', apy: '25-35%' }
+	// LP Lock Duration Tiers (from NONOS Privacy Infrastructure Economy whitepaper)
+	const lpTiers = [
+		{ duration: '14 days', multiplier: '1.00x', boost: 'Baseline' },
+		{ duration: '30 days', multiplier: '1.25x', boost: '+25%' },
+		{ duration: '90 days', multiplier: '1.60x', boost: '+60%' },
+		{ duration: '180 days', multiplier: '2.00x', boost: '+100%' },
+		{ duration: '365 days', multiplier: '2.50x', boost: '+150%' }
+	];
+
+	// Work Categories (from whitepaper)
+	const workCategories = [
+		{ name: 'Traffic Relay', weight: '30%', desc: 'Bandwidth relayed through circuits' },
+		{ name: 'ZK Proof Generation', weight: '25%', desc: 'Zero-knowledge proofs computed' },
+		{ name: 'Mixer Operations', weight: '20%', desc: 'Participation in mixing rounds' },
+		{ name: 'Entropy Provision', weight: '15%', desc: 'Verifiable randomness contributions' },
+		{ name: 'Registry Operations', weight: '10%', desc: 'Stealth address registrations' }
 	];
 
 	onMount(() => {
@@ -147,29 +157,44 @@
 	</div>
 
 	<div class="staking-section">
-		<h2>Staking Tiers</h2>
+		<h2>Liquidity Pool Lock Tiers</h2>
 		<p class="section-desc">
-			Stake NOX tokens to run a community node and earn rewards. Higher tiers unlock better APY rates with stake-weighted distribution (sqrt formula to prevent whale dominance).
+			Lock NOX in the Privacy Liquidity Pool to earn 30% of protocol rewards. Longer lock durations receive higher reward multipliers. Node operators earn the other 70% based on work performed.
 		</p>
 
 		<div class="tiers-grid">
-			{#each tiers as tier}
+			{#each lpTiers as tier}
 				<div class="tier-card">
-					<div class="tier-name">{tier.name}</div>
+					<div class="tier-name">{tier.duration}</div>
 					<div class="tier-details">
 						<div class="tier-row">
-							<span class="label">Minimum Stake</span>
-							<span class="value">{tier.min} NOX</span>
+							<span class="label">Multiplier</span>
+							<span class="value multiplier">{tier.multiplier}</span>
 						</div>
 						<div class="tier-row">
-							<span class="label">Lock Period</span>
-							<span class="value">{tier.lock === '0' ? 'None' : `${tier.lock} days`}</span>
-						</div>
-						<div class="tier-row">
-							<span class="label">APY Range</span>
-							<span class="value apy">{tier.apy}</span>
+							<span class="label">Effective Boost</span>
+							<span class="value boost">{tier.boost}</span>
 						</div>
 					</div>
+				</div>
+			{/each}
+		</div>
+	</div>
+
+	<div class="work-section">
+		<h2>Work Categories</h2>
+		<p class="section-desc">
+			Node operators earn rewards based on measurable privacy work performed, not tokens staked. Work is tracked across five categories:
+		</p>
+
+		<div class="work-grid">
+			{#each workCategories as category}
+				<div class="work-card">
+					<div class="work-header">
+						<span class="work-name">{category.name}</span>
+						<span class="work-weight">{category.weight}</span>
+					</div>
+					<div class="work-desc">{category.desc}</div>
 				</div>
 			{/each}
 		</div>
@@ -194,13 +219,15 @@
 	</div>
 
 	<div class="info-section">
-		<h3>How Rewards Work</h3>
+		<h3>Privacy Infrastructure Economy</h3>
 		<ul>
-			<li><strong>Epoch Duration:</strong> 24 hours</li>
-			<li><strong>Total Staking Pool:</strong> 32,000,000 NOX (4% of supply)</li>
-			<li><strong>Distribution Formula:</strong> sqrt(stake) × tier_multiplier × quality_score</li>
-			<li><strong>Yearly Decay:</strong> 15% emission reduction per year</li>
-			<li><strong>Quality Score:</strong> Based on uptime, success rate, latency, and reliability</li>
+			<li><strong>Epoch Duration:</strong> 7 days</li>
+			<li><strong>Bootstrap Pool:</strong> 40,000,000 NOX (5% of 800M supply)</li>
+			<li><strong>Daily Emissions:</strong> 54,794 NOX for 730 days (2 years)</li>
+			<li><strong>Reward Split:</strong> 70% to node operators, 30% to liquidity providers</li>
+			<li><strong>Node Distribution:</strong> Proportional to work score (work performed, not tokens held)</li>
+			<li><strong>LP Distribution:</strong> Proportional to weighted lock amount (duration × multiplier)</li>
+			<li><strong>Core Principle:</strong> Work creates value. Value creates rewards.</li>
 		</ul>
 	</div>
 </div>
@@ -377,6 +404,66 @@
 
 	.tier-row .value.apy {
 		color: var(--nox-success);
+	}
+
+	.tier-row .value.multiplier {
+		color: var(--nox-accent-primary);
+		font-weight: 600;
+	}
+
+	.tier-row .value.boost {
+		color: var(--nox-success);
+	}
+
+	/* Work Section */
+	.work-section {
+		margin-bottom: var(--nox-space-xl);
+	}
+
+	.work-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: var(--nox-space-md);
+	}
+
+	.work-card {
+		background: var(--nox-bg-secondary);
+		border: 1px solid var(--nox-border);
+		border-radius: var(--nox-radius-lg);
+		padding: var(--nox-space-md);
+		transition: all var(--nox-transition-fast);
+	}
+
+	.work-card:hover {
+		border-color: var(--nox-accent-primary);
+	}
+
+	.work-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--nox-space-sm);
+	}
+
+	.work-name {
+		font-weight: 600;
+		font-size: 13px;
+	}
+
+	.work-weight {
+		font-family: var(--nox-font-mono);
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--nox-accent-primary);
+		background: var(--nox-accent-glow);
+		padding: 2px 8px;
+		border-radius: var(--nox-radius-sm);
+	}
+
+	.work-desc {
+		font-size: 11px;
+		color: var(--nox-text-muted);
+		line-height: 1.4;
 	}
 
 	.stake-form {
