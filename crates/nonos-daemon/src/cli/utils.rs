@@ -1,5 +1,9 @@
 use super::commands::Cli;
 use nonos_daemon::ContractConfig;
+use nonos_daemon::contracts::{
+    USE_SEPOLIA, NOX_TOKEN_SEPOLIA, NOX_TOKEN_MAINNET,
+    NOX_STAKING_CONTRACT_SEPOLIA, NOX_STAKING_CONTRACT_MAINNET,
+};
 use nonos_types::{EthAddress, NonosResult};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter, layer::SubscriberExt};
 
@@ -67,23 +71,51 @@ pub fn print_banner() {
 }
 
 pub fn load_contract_config() -> NonosResult<ContractConfig> {
+    let (default_rpc, default_token, default_staking, default_chain_id) = if USE_SEPOLIA {
+        (
+            "https://ethereum-sepolia-rpc.publicnode.com",
+            NOX_TOKEN_SEPOLIA,
+            NOX_STAKING_CONTRACT_SEPOLIA,
+            11155111u64,
+        )
+    } else {
+        (
+            "https://ethereum-rpc.publicnode.com",
+            NOX_TOKEN_MAINNET,
+            NOX_STAKING_CONTRACT_MAINNET,
+            1u64,
+        )
+    };
+
     Ok(ContractConfig {
         rpc_url: std::env::var("NONOS_RPC_URL")
-            .unwrap_or_else(|_| "https://mainnet.base.org".to_string()),
+            .unwrap_or_else(|_| default_rpc.to_string()),
         staking_address: std::env::var("NONOS_STAKING_CONTRACT")
             .ok()
             .map(|s| parse_eth_address(&s))
             .transpose()?
-            .unwrap_or_else(EthAddress::zero),
+            .unwrap_or_else(|| {
+                if default_staking.is_empty() {
+                    EthAddress::zero()
+                } else {
+                    parse_eth_address(default_staking).unwrap_or_else(|_| EthAddress::zero())
+                }
+            }),
         token_address: std::env::var("NONOS_TOKEN_CONTRACT")
             .ok()
             .map(|s| parse_eth_address(&s))
             .transpose()?
-            .unwrap_or_else(EthAddress::zero),
+            .unwrap_or_else(|| {
+                if default_token.is_empty() {
+                    EthAddress::zero()
+                } else {
+                    parse_eth_address(default_token).unwrap_or_else(|_| EthAddress::zero())
+                }
+            }),
         chain_id: std::env::var("NONOS_CHAIN_ID")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(8453),
+            .unwrap_or(default_chain_id),
     })
 }
 
